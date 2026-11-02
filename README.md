@@ -172,7 +172,22 @@ Headless 驗證（`node spikes/003-prototype/test-headless.mjs`，真 Chrome）�
 
 測試：`test-headless.mjs` 新增 180ms 延遲情境，斷言 `align ≈ 180 ± 20`、總分 > 80、0 漏拍；原有 8 個情境（準／散／拉後／bossa／華爾茲／目標偏移）全部仍然 PASS。
 
-## 10. 點跑
+## 10. 第四次回饋：double-tap 放大又返嚟
+
+第一次只加咗 `.tap-pad{touch-action:none}`，喺 Chrome 量到係 `none`，但 iPhone 上照樣縮放。原因：**iOS Safari 嘅 double-tap zoom 唔係由 `touch-action` 單獨決定**，佢係一個手勢判定，最可靠嘅抑制點係 `touchstart` 入面 `preventDefault()`（要 `{passive:false}`）；而且用家好可能唔係打正個 pad（打咗去 lane／旁邊），嗰啲位置只有 `manipulation`。
+
+而家四層一齊做（v6）：
+
+1. `<meta viewport>` 加 `maximum-scale=1, user-scalable=no`。
+2. `.tap-pad{touch-action:none}`；**練習期間 `body.playing{touch-action:none}`**（`startSession()` 加、`finish()` 移除）。
+3. `document.addEventListener("touchstart", …, {passive:false})`：喺練習區／pad 上 `preventDefault()`，iOS 順便喺呢度收拍子（同 `pointerdown` 撞嘅話由 35ms chord dedupe 合併），按鈕（停、chips）除外。
+4. `dblclick` 一律 `preventDefault()`，另外 `pointerdown` 由「只食 pad」擴大到「整個練習區」（撳 lane 都算），但唔會食到掣。
+
+加咗 **版本 chip（`v6`）喺標題旁**，因為 Safari 會好硬咁 cache：見到 `v6` 就代表載到新 build，否則就係舊 cache（唔好用「又壞咗」去 debug 一個根本未載入嘅版本）。
+
+測試 `test-touch.mjs`（iPhone 模擬：390×844、dpr 3、touch emulation）：viewport 有 `maximum-scale=1`、練習中 `body` 同 pad 都係 `touch-action:none`、pad／lane 嘅 `touchstart` 被 `preventDefault`、停掣唔會被攔、撳 lane 計得到一下 tap、收工後 `playing` class 移除、0 JS error。
+
+## 11. 點跑
 
 
 ```bash

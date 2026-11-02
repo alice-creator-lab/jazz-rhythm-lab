@@ -273,6 +273,7 @@ function startSession({ testMode = false } = {}) {
   $("stage").classList.remove("hidden");
   $("stageBadge").textContent = "count-in";
   $("alignWarn").textContent = "";
+  document.body.classList.add("playing"); // 練習期間封鎖瀏覽器手勢（iOS double-tap zoom）
   S.running = true;
   loop();
 }
@@ -423,6 +424,7 @@ function finish() {
   if (!S.session) return;
   S.running = false;
   cancelAnimationFrame(S.raf);
+  document.body.classList.remove("playing");
   stopAudio(); // 即刻收聲：唔好留返已經排咗嘅 click 繼續響
   const s = S.session;
   const r = scoreSession({
@@ -461,7 +463,7 @@ function finish() {
 
   const c = ensureCtx();
   $("clockInfo").textContent =
-    `時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
+    `v6 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
 
   S.hist.push({ t: Date.now(), feel: s.feel.id, bpm: s.bpm, total: r.total, grade: r.grade, pocket: r.pocketMs, sigma: r.sigmaMs, ratio: r.swingRatio });
   S.hist = S.hist.slice(-12);
@@ -531,7 +533,29 @@ function bindUI() {
   $("againBtn").onclick = () => { $("result").classList.add("hidden"); $("setup").classList.remove("hidden"); startSession(); };
   $("backBtn").onclick = () => { $("result").classList.add("hidden"); $("setup").classList.remove("hidden"); };
 
-  $("tapPad").addEventListener("pointerdown", (e) => { e.preventDefault(); handleTapAt(perfToAudioMs(e.timeStamp)); });
+  // 打拍子：整個練習區都食（唔止個 pad），但唔可以食到「停」掣
+  const isControl = (el) => !!(el && el.closest && el.closest("button, input, .btn, .feel"));
+  $("stage").addEventListener("pointerdown", (e) => {
+    if (isControl(e.target)) return;
+    e.preventDefault();
+    handleTapAt(perfToAudioMs(e.timeStamp));
+  });
+
+  // iOS Safari：pointerdown 嘅 preventDefault 擋唔到 double-tap zoom，
+  // 一定要喺 touchstart 呢個手勢判定點 preventDefault。順便喺呢度收拍子，
+  // 同 pointerdown 撞嘅話會被 35ms chord dedupe 合併。
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const touchGuard = (e) => {
+    const t = e.target;
+    if (isControl(t)) return;
+    if (!S.running && !(t.closest && t.closest("#tapPad"))) return;
+    e.preventDefault();
+    if (isIOS) handleTapAt(perfToAudioMs(e.timeStamp), "touch");
+  };
+  document.addEventListener("touchstart", touchGuard, { passive: false });
+
+  document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
 
   addEventListener("keydown", (e) => {
     if (e.repeat) return;
