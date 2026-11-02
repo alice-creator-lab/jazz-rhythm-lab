@@ -11,8 +11,8 @@ const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 
 const S = {
-  feelId: "swing-med",
-  bpm: 120,
+  feelId: "basic-a",
+  bpm: 110,
   bars: 4,
   targetOffset: 0,
   subdiv: false,
@@ -525,7 +525,7 @@ function finish() {
 
   const c = ensureCtx();
   $("clockInfo").textContent =
-    `v9 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
+    `v10 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
 
   S.hist.push({ t: Date.now(), feel: s.feel.id, bpm: s.bpm, total: r.total, grade: r.grade, pocket: r.pocketMs, sigma: r.sigmaMs, ratio: r.swingRatio });
   S.hist = S.hist.slice(-12);
@@ -554,11 +554,23 @@ function renderHist() {
 function renderFeels() {
   const el = $("feels");
   el.innerHTML = "";
+  let grid = null, group = null;
   for (const f of FEELS) {
+    if (f.group !== group) {
+      group = f.group;
+      const h = document.createElement("div");
+      h.className = "gname";
+      h.textContent = group;
+      el.appendChild(h);
+      grid = document.createElement("div");
+      grid.className = "feelgrid";
+      el.appendChild(grid);
+    }
     const b = document.createElement("button");
     b.className = "feel" + (f.id === S.feelId ? " on" : "");
     b.innerHTML = `<b>${f.name}</b><small>${f.sub}</small>`;
     b.onclick = () => {
+      // 揀 style 唔再自動示範（要聽就撳「試聽 2 小節」）
       S.feelId = f.id;
       S.bpm = f.bpm;
       $("bpm").value = f.bpm;
@@ -566,9 +578,8 @@ function renderFeels() {
       renderFeels();
       renderHint();
       renderCounts(f);
-      previewFeel(f); // 揀完即聽一個 bar + 亮燈
     };
-    el.appendChild(b);
+    grid.appendChild(b);
   }
 }
 
@@ -591,6 +602,7 @@ function bindUI() {
     renderHint();
   };
   $("calibBtn").onclick = () => { ensureCtx().resume(); runCalibration(); };
+  $("auditionBtn").onclick = () => { ensureCtx().resume(); previewFeel(feelById(S.feelId)); };
   $("startBtn").onclick = async () => { await ensureCtx().resume(); startSession(); };
   $("stopBtn").onclick = () => finish();
   $("againBtn").onclick = () => { $("result").classList.add("hidden"); $("setup").classList.remove("hidden"); startSession(); };
@@ -695,6 +707,16 @@ window.__spike = {
 };
 
 // boot
+function syncSetupControls() {
+  $("bpm").value = S.bpm;
+  $("bpmVal").textContent = `${S.bpm} bpm`;
+  $("bars").value = S.bars;
+  $("barsVal").textContent = `${S.bars} 小節`;
+  $("offset").value = S.targetOffset;
+  $("offsetVal").textContent = `${S.targetOffset} ms`;
+  $("subdiv").checked = !!S.subdiv;
+}
+syncSetupControls();
 renderFeels();
 renderHint();
 renderCounts();

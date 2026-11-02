@@ -216,7 +216,20 @@ Headless 驗證（`node spikes/003-prototype/test-headless.mjs`，真 Chrome）�
 
 保留上一版嘅 `已收 N / 目標 M 下` 計數器，因為佢係分「輸入冇收到」同「評分話唔準」嘅唯一方法。
 
-## 13. 點跑
+## 13. 第七次回饋：揀 style 唔再示範、chips 分組
+
+- **揀 chip 唔再自動示範**（連亮燈都唔會排），要聽就撳新加嘅 **「試聽 2 小節」** 掣 —— 明確、唔會次次揀都被迫聽一次。
+- **chips 分組**：`基礎`（基本 A–D）、`進階`（中速 Swing／快速 Swing／Ballad／Charleston）、`其他風格`（Jazz Waltz／Bossa／Straight-Funk）。實作係 `FEELS[].group` + `renderFeels()` 逐組砌 `.gname` + `.feelgrid`。
+- 補齊 **基本 C、D**：
+  | id | pattern | 拍點 |
+  |---|---|---|
+  | `basic-c` | LONG short LONG short | 1, 2&, 3, 4& |
+  | `basic-d` | LONG LONG LONG short | 1, 2, 3, 4&（4& 提前入下一小節）|
+- 預設 feel 改為 `basic-a`（110bpm），因為「基礎」擺第一組；開機時 `syncSetupControls()` 會將 slider 同 state 對齊（之前 slider 寫死 120 而 hint 寫 110，兩邊唔一致）。
+
+測試 `test-counts.mjs` 加咗：開機 slider/bpm 標籤/state 三者一致、預設係 `basic-a`、**撳 chip 之後 0 盞燈**（證明唔會自動示範）、撳「試聽 2 小節」之後排 12 盞燈（2 bars × 6，冇數拍 click）。
+
+## 14. 點跑
 
 
 ```bash

@@ -13,47 +13,57 @@
 // ---------------------------------------------------------------------------
 export const FEELS = [
   {
-    id: "basic-a", name: "基本節奏 A", sub: "LONG short LONG LONG（1 2& 3 4）",
+    id: "basic-a", name: "基本 A", group: "基礎", sub: "LONG short LONG LONG（1 2& 3 4）",
     beatsPerBar: 4, bars: 2, swing: 2.0, bpm: 110,
     pattern: [[0, "on"], [1, "off"], [2, "on"], [3, "on"]],
   },
   {
-    id: "basic-b", name: "基本節奏 B", sub: "LONG LONG short LONG（1 2 3& 4）",
+    id: "basic-b", name: "基本 B", group: "基礎", sub: "LONG LONG short LONG（1 2 3& 4）",
     beatsPerBar: 4, bars: 2, swing: 2.0, bpm: 110,
     pattern: [[0, "on"], [1, "on"], [2, "off"], [3, "on"]],
   },
   {
-    id: "swing-med", name: "中速 Swing", sub: "spang-a-lang ride pattern",
+    id: "basic-c", name: "基本 C", group: "基礎", sub: "LONG short LONG short（1 2& 3 4&）",
+    beatsPerBar: 4, bars: 2, swing: 2.0, bpm: 110,
+    pattern: [[0, "on"], [1, "off"], [2, "on"], [3, "off"]],
+  },
+  {
+    id: "basic-d", name: "基本 D", group: "基礎", sub: "LONG LONG LONG short（1 2 3 4&）",
+    beatsPerBar: 4, bars: 2, swing: 2.0, bpm: 110,
+    pattern: [[0, "on"], [1, "on"], [2, "on"], [3, "off"]],
+  },
+  {
+    id: "swing-med", name: "中速 Swing", group: "進階", sub: "spang-a-lang ride pattern",
     beatsPerBar: 4, bars: 2, swing: 2.0, bpm: 110,
     pattern: [[0, "on"], [1, "on"], [1, "off"], [2, "on"], [3, "on"], [3, "off"]],
   },
   {
-    id: "swing-fast", name: "快速 Swing", sub: "2-feel，1 同 3 落，後半拍點綴",
+    id: "swing-fast", name: "快速 Swing", group: "進階", sub: "2-feel，1 同 3 落，後半拍點綴",
     beatsPerBar: 4, bars: 2, swing: 1.6, bpm: 200,
     pattern: [[0, "on"], [1, "off"], [2, "on"], [3, "off"]],
   },
   {
-    id: "ballad", name: "Ballad 慢歌", sub: "1、3 落地，4 後半拍 pickup",
+    id: "ballad", name: "Ballad 慢歌", group: "進階", sub: "1、3 落地，4 後半拍 pickup",
     beatsPerBar: 4, bars: 2, swing: 2.2, bpm: 60,
     pattern: [[0, "on"], [2, "on"], [3, "off"]],
   },
   {
-    id: "waltz", name: "Jazz Waltz", sub: "3/4：1，2 後半拍，3",
-    beatsPerBar: 3, bars: 2, swing: 2.0, bpm: 140,
-    pattern: [[0, "on"], [1, "off"], [2, "on"]],
-  },
-  {
-    id: "bossa", name: "Bossa Nova", sub: "平直 8 分，唔 swing",
-    beatsPerBar: 4, bars: 2, swing: 1.0, bpm: 130,
-    pattern: [[0, "on"], [0, "off"], [1, "on"], [1, "off"], [2, "on"], [2, "off"], [3, "on"], [3, "off"]],
-  },
-  {
-    id: "charleston", name: "Charleston 伴奏", sub: "1 同 2 後半拍，經典 comping",
+    id: "charleston", name: "Charleston 伴奏", group: "進階", sub: "1 同 2 後半拍，經典 comping",
     beatsPerBar: 4, bars: 2, swing: 2.0, bpm: 120,
     pattern: [[0, "on"], [1, "off"]],
   },
   {
-    id: "funk", name: "Straight / Funk", sub: "平直 8 分，ECM／modern jazz 常用",
+    id: "waltz", name: "Jazz Waltz", group: "其他風格", sub: "3/4：1，2 後半拍，3",
+    beatsPerBar: 3, bars: 2, swing: 2.0, bpm: 140,
+    pattern: [[0, "on"], [1, "off"], [2, "on"]],
+  },
+  {
+    id: "bossa", name: "Bossa Nova", group: "其他風格", sub: "平直 8 分，唔 swing",
+    beatsPerBar: 4, bars: 2, swing: 1.0, bpm: 130,
+    pattern: [[0, "on"], [0, "off"], [1, "on"], [1, "off"], [2, "on"], [2, "off"], [3, "on"], [3, "off"]],
+  },
+  {
+    id: "funk", name: "Straight / Funk", group: "其他風格", sub: "平直 8 分，ECM／modern jazz 常用",
     beatsPerBar: 4, bars: 2, swing: 1.0, bpm: 96,
     pattern: [[0, "on"], [1, "on"], [2, "on"], [3, "on"], [3, "off"]],
   },

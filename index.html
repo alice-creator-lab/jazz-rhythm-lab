@@ -32,7 +32,10 @@
   .hidden{display:none !important}
 
   /* felt chips */
-  .feels{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px}
+  .feels{display:block}
+  .feels .gname{font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin:12px 0 6px}
+  .feels .gname:first-child{margin-top:0}
+  .feelgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(124px,1fr));gap:8px}
   .feel{
     background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 11px;
     cursor:pointer;transition:.15s; text-align:left; color:var(--ink); font:inherit;
@@ -140,7 +143,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Jazz 拍子實驗室 <span>· swing feel 練習</span> <span class="ver" id="verTag">v9</span></h1>
+    <h1>Jazz 拍子實驗室 <span>· swing feel 練習</span> <span class="ver" id="verTag">v10</span></h1>
     <p>唔係「啱唔啱拍子」咁簡單 — 練嘅係 <b>後半拍擺喺邊</b>（swing ratio）、<b>每一下穩唔穩</b>（σ）、同 <b>整體拉後幾多</b>（pocket）。</p>
   </header>
 
@@ -178,6 +181,7 @@
 
     <div class="row" style="margin-top:16px">
       <button class="btn" id="calibBtn">先做校準（8 下 click）</button>
+      <button class="btn" id="auditionBtn">試聽 2 小節</button>
       <button class="btn primary" id="startBtn">開始練習</button>
     </div>
     <div class="row">
