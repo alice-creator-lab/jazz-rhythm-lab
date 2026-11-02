@@ -303,6 +303,8 @@ function startSession({ testMode = false } = {}) {
   $("stage").classList.remove("hidden");
   $("stageBadge").textContent = "count-in";
   $("alignWarn").textContent = "";
+  $("trace").textContent = "";
+  TRACE.length = 0;
   document.body.classList.add("playing"); // 練習期間封鎖瀏覽器手勢（iOS double-tap zoom）
   S.running = true;
   loop();
@@ -372,26 +374,48 @@ function handleTapAt(audioMs, source = "tap") {
   if (S.calibMode) {
     S.calibMode.taps.push(audioMs);
     flashPad(source);
-    return;
+    return { counted: true, reason: "calib" };
   }
   const s = S.session;
-  if (!s || !S.running) return;
+  if (!s || !S.running) return { counted: false, reason: "冇練習中" };
   const t = audioMs - S.calibMs;
-  if (t < s.t0 - s.beatMs * 0.45) return; // count-in 唔計分
+  if (t < s.t0 - s.beatMs * 0.45) { flashPad(source); return { counted: false, reason: "count-in" }; }
 
-  // 和弦 = 一下：同一 gesture 內 35ms 內嘅第二粒音唔當另一下
-  // （鋼琴 comping 一次落三四粒音，MIDI 會逐粒送 note-on）
-  if (t - s.lastTap < 35) {
-    if (source === "midi" || source === "tap") s.chordIgnored = (s.chordIgnored || 0) + 1;
+  // 同一 gesture 去重：只擋「唔同來源、同一瞬間」嘅重複（touchstart + pointerdown + mousedown）。
+  // 唔可以用「時間差 < 35ms 就掉」去擋兩個真拍子 —— 短→長可以只差 180ms，
+  // 而且時間映射一有抖動就會誤殺。
+  const sameGesture = source !== s.lastSource && t - s.lastTap < 60 && t >= s.lastTap - 60;
+  if (sameGesture) {
+    s.chordIgnored = (s.chordIgnored || 0) + 1;
     flashPad(source);
-    return;
+    return { counted: false, reason: "重複事件" };
   }
   s.lastTap = t;
+  s.lastSource = source;
 
   s.taps.push(t);
   paintHit(t);
   updateLive();
   flashPad(source);
+  return { counted: true, reason: source };
+}
+
+// --- 輸入 trace：練習時將每一個收到嘅 event 顯示出嚟（診斷「app 收唔到」用） ---
+const TRACE = [];
+function recordTap(type, ev, res) {
+  TRACE.push({
+    type,
+    t: Math.round(ev.timeStamp),
+    ok: !!res.counted,
+    why: res.counted ? "" : (res.reason || ""),
+  });
+  if (TRACE.length > 60) TRACE.shift();
+  const el = $("trace");
+  if (el) {
+    el.textContent = TRACE.slice(-6)
+      .map((x) => `${x.type}@${x.t}${x.ok ? " ✓" : " ✗ " + x.why}`)
+      .join("   ");
+  }
 }
 
 function nearestTarget(t) {
@@ -501,7 +525,7 @@ function finish() {
 
   const c = ensureCtx();
   $("clockInfo").textContent =
-    `v8 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
+    `v9 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
 
   S.hist.push({ t: Date.now(), feel: s.feel.id, bpm: s.bpm, total: r.total, grade: r.grade, pocket: r.pocketMs, sigma: r.sigmaMs, ratio: r.swingRatio });
   S.hist = S.hist.slice(-12);
@@ -577,7 +601,7 @@ function bindUI() {
   $("stage").addEventListener("pointerdown", (e) => {
     if (isControl(e.target)) return;
     e.preventDefault();
-    handleTapAt(perfToAudioMs(e.timeStamp));
+    recordTap("pointerdown", e, handleTapAt(perfToAudioMs(e.timeStamp), "pointer"));
   });
 
   // iOS Safari：pointerdown 嘅 preventDefault 擋唔到 double-tap zoom，
@@ -587,10 +611,13 @@ function bindUI() {
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const touchGuard = (e) => {
     const t = e.target;
-    if (isControl(t)) return;
+    if (isControl(t)) { recordTap("touchstart", e, { counted: false, reason: "控制" }); return; }
     if (!S.running && !(t.closest && t.closest("#tapPad"))) return;
     e.preventDefault();
-    if (isIOS) handleTapAt(perfToAudioMs(e.timeStamp), "touch");
+    const res = isIOS
+      ? handleTapAt(perfToAudioMs(e.timeStamp), "touch")
+      : { counted: false, reason: "非 iOS" };
+    recordTap("touchstart", e, res);
   };
   document.addEventListener("touchstart", touchGuard, { passive: false });
 
@@ -600,7 +627,7 @@ function bindUI() {
     if (e.repeat) return;
     if (e.target.tagName === "INPUT") return;
     if (e.code === "Space") e.preventDefault();
-    handleTapAt(perfToAudioMs(e.timeStamp));
+    recordTap("key", e, handleTapAt(perfToAudioMs(e.timeStamp), "key"));
   });
 
   // Web MIDI（jazz pianist 最實用：數碼鋼琴 → USB MIDI）
@@ -654,6 +681,7 @@ window.__spike = {
     feel: c.querySelector("span").textContent,
     muted: c.classList.contains("muted"),
   })),
+  trace: () => TRACE.slice(-12),
   clock: () => {
     const c = ensureCtx();
     return {

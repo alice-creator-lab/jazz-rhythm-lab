@@ -120,6 +120,17 @@ const pointerTaps = await evalJs(`(async () => {
 })()`);
 check(pointerTaps.after === pointerTaps.before + 1, `撳 lane 應該計一下 tap，實際 ${pointerTaps.before} → ${pointerTaps.after}`);
 
+// 5b. 三下相隔 180ms（短→長→短）都要全部收到 —— 舊版 35ms dedupe 會誤殺
+const fastTaps = await evalJs(`(() => {
+  const s = __spike.state.session;
+  const base = s.taps.length;
+  __spike.tapAtAudio(s.t0 + 3000);
+  __spike.tapAtAudio(s.t0 + 3180);
+  __spike.tapAtAudio(s.t0 + 3360);
+  return { base, after: s.taps.length };
+})()`);
+check(fastTaps.after === fastTaps.base + 3, `相隔 180ms 嘅三下應該全部收到，實際 ${fastTaps.base} → ${fastTaps.after}`);
+
 // 6. 收工 → playing class 移除
 const after = await evalJs(`(() => { __spike.finish(); return { cls: document.body.className, bodyTA: getComputedStyle(document.body).touchAction }; })()`);
 check(!/playing/.test(after.cls), `收工後唔應該再有 playing class，實際「${after.cls}」`);
