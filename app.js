@@ -69,8 +69,8 @@ const audioNowMs = () => perfToAudioMs(performance.now());
 const activeOsc = new Set();
 
 /**
- * 一種 click 音：LONG（正拍）低、長、厚；short（後半拍）高、短促；sub（細分參考）最細聲。
- * 用音色去分長短，係為咗「短後面接長」呢種位置聽得返出嚟。
+ * 一種 click 音。目標音（LONG 同 short）一律同一個聲——用家要求唔好靠音色分長短。
+ * `sub` 只係細分參考聲：同一個音高，但細聲同短促。
  */
 function click(atSec, { accent = false, vol = 1, kind = "on" } = {}) {
   const c = ensureCtx();
@@ -79,14 +79,12 @@ function click(atSec, { accent = false, vol = 1, kind = "on" } = {}) {
   const g = c.createGain();
   g.connect(c.destination);
   const o1 = c.createOscillator(), o2 = c.createOscillator();
-  const long = kind === "on", sub = kind === "sub";
-  o1.type = "triangle";
-  o1.frequency.value = accent ? 1150 : long ? 660 : sub ? 1500 : 1040;
-  o2.type = "sine";
-  o2.frequency.value = accent ? 2300 : long ? 1320 : sub ? 3000 : 2080;
+  const sub = kind === "sub";
+  o1.type = "triangle"; o1.frequency.value = accent ? 1150 : 830;
+  o2.type = "sine"; o2.frequency.value = accent ? 2300 : 1660;
   o1.connect(g); o2.connect(g);
-  const decay = sub ? 0.022 : long ? 0.10 : 0.038;
-  const peak = (accent ? 0.85 : long ? 0.5 : sub ? 0.16 : 0.42) * vol;
+  const decay = sub ? 0.045 : 0.085;
+  const peak = (accent ? 0.85 : 0.5) * vol; // sub 嘅細聲由 vol 控制
   g.gain.setValueAtTime(0.0001, when);
   g.gain.linearRampToValueAtTime(peak, when + 0.002);
   g.gain.exponentialRampToValueAtTime(0.0006, when + decay);
@@ -192,7 +190,7 @@ function previewFeel(feel) {
     S.queue.push({
       atSec: (t0 + tg.t) / 1000,
       accent: tg.kind === "on" && tg.beat === 0,
-      vol: tg.kind === "off" ? 0.62 : 1,
+      vol: 1,
       kind: tg.kind,
     });
   }
@@ -282,7 +280,7 @@ function startSession({ testMode = false } = {}) {
         for (const kind of ["on", "off"]) {
           const tt = t0 + b * grid.barMs + (beat + (kind === "off" ? f : 0)) * grid.beatMs;
           if (!targets.some((tg) => Math.abs(tg.t - tt) < 12)) {
-            S.queue.push({ atSec: tt / 1000, kind: "sub" });
+            S.queue.push({ atSec: tt / 1000, kind: "sub", vol: 0.32 });
           }
         }
       }
@@ -311,7 +309,8 @@ function startSession({ testMode = false } = {}) {
 }
 
 function viewMs() {
-  return S.session ? S.session.barMs * 2 : 2000;
+  // 一次睇一個 bar：時間軸短啲，點同點之間就分得開（「短→長」呢種 182ms 嘅距）
+  return S.session ? S.session.barMs : 2000;
 }
 
 function buildLane() {
@@ -344,11 +343,15 @@ function loop() {
   const vw = viewMs();
   const x = (t) => phX + ((t - now) / vw) * W;
 
+  // 下一個要打嘅目標：加個淡淡嘅光環，望得到「下一步嚟緊」
+  let nextTg = null;
+  for (const tg of s.targets) { if (tg.t >= now) { nextTg = tg; break; } }
   for (const [tg, el] of S.dots) {
     const px = x(tg.t);
     if (px < -40 || px > W + 40) { el.style.display = "none"; continue; }
     el.style.display = "block";
     el.style.left = px + "px";
+    el.classList.toggle("next", tg === nextTg);
   }
   for (const bl of lane.querySelectorAll(".barline")) {
     const px = x(+bl.dataset.t);
@@ -498,7 +501,7 @@ function finish() {
 
   const c = ensureCtx();
   $("clockInfo").textContent =
-    `v7 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
+    `v8 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
 
   S.hist.push({ t: Date.now(), feel: s.feel.id, bpm: s.bpm, total: r.total, grade: r.grade, pocket: r.pocketMs, sigma: r.sigmaMs, ratio: r.swingRatio });
   S.hist = S.hist.slice(-12);

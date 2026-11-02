@@ -65,10 +65,11 @@
   .barline{position:absolute;top:0;bottom:0;width:1px;background:#1e2836}
   .playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);
     box-shadow:0 0 12px rgba(240,179,74,.55);transform:translateX(-1px)}
-  .dot{position:absolute;top:0;width:14px;height:14px;border-radius:50%;
+  .dot{position:absolute;top:0;width:17px;height:17px;border-radius:50%;
     background:#1b2430;border:1.5px solid #38485c;transform:translate(-50%,-50%);
     transition:background .12s,border-color .12s,box-shadow .12s}
   .dot.off{border-style:dashed}
+  .dot.next{border-color:#7d93ad;box-shadow:0 0 0 4px rgba(240,179,74,.16)}
   .dot.hit-good{background:var(--good);border-color:var(--good);box-shadow:0 0 14px rgba(94,224,176,.7)}
   .dot.hit-ok{background:var(--warn);border-color:var(--warn);box-shadow:0 0 14px rgba(240,179,74,.6)}
   .dot.hit-bad{background:var(--bad);border-color:var(--bad);box-shadow:0 0 14px rgba(255,107,107,.6)}
@@ -138,7 +139,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Jazz 拍子實驗室 <span>· swing feel 練習</span> <span class="ver" id="verTag">v7</span></h1>
+    <h1>Jazz 拍子實驗室 <span>· swing feel 練習</span> <span class="ver" id="verTag">v8</span></h1>
     <p>唔係「啱唔啱拍子」咁簡單 — 練嘅係 <b>後半拍擺喺邊</b>（swing ratio）、<b>每一下穩唔穩</b>（σ）、同 <b>整體拉後幾多</b>（pocket）。</p>
   </header>
 
