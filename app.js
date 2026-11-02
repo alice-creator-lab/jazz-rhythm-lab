@@ -83,6 +83,7 @@ function click(atSec, accent, vol = 1) {
 /** 即刻收聲：清 queue、停所有已排程嘅 oscillator、停 scheduler。 */
 function stopAudio() {
   S.queue.length = 0;
+  clearLights();
   if (S.sched) { clearInterval(S.sched); S.sched = null; }
   for (const o of activeOsc) {
     try { o.onended = null; o.stop(0); } catch {}
@@ -99,6 +100,65 @@ function pumpQueue() {
     const ev = S.queue.shift();
     click(ev.atSec, ev.accent, ev.vol ?? 1);
   }
+}
+
+// ---------------------------------------------------------------------------
+// 基本拍子計數（1 & 2 & 3 & 4 &）＋ 亮燈
+// ---------------------------------------------------------------------------
+function renderCounts(feel = feelById(S.feelId)) {
+  const el = $("counts");
+  if (!el) return;
+  const beats = feel.beatsPerBar;
+  const f = swingOffset(feel.swing);
+  const swingy = feel.swing > 1.05;
+  el.style.gridTemplateColumns = `repeat(${beats * 2}, minmax(0,1fr))`;
+  el.innerHTML = "";
+  for (let b = 0; b < beats; b++) {
+    for (const kind of ["on", "off"]) {
+      const d = document.createElement("div");
+      const played = feel.pattern.some(([p, k]) => p === b && k === kind);
+      d.className = "cnt" + (kind === "off" ? " off" : "") + (played ? "" : " muted");
+      const posPct = Math.round((kind === "off" ? f : 0) * 100);
+      const posMs = Math.round(((kind === "off" ? f : 0) * 60000) / S.bpm);
+      d.title = kind === "off"
+        ? `後半拍：拍內 ${posPct}%（@${S.bpm}bpm = ${posMs}ms）`
+        : `正拍：拍頭（${S.bpm}bpm）`;
+      d.innerHTML = `<b>${kind === "on" ? b + 1 : "&"}</b><span>${swingy ? (kind === "off" ? "short" : "LONG") : "even"}</span>`;
+      d.dataset.slot = String(b * 2 + (kind === "off" ? 1 : 0));
+      el.appendChild(d);
+    }
+  }
+  const total = beats * 2;
+  $("countHint").innerHTML = swingy
+    ? `${beats}/4 拍 × 2 = ${total} 格。後半拍（&）擺喺每拍 ${(f * 100).toFixed(0)}% 位置，即 LONG : short = 1 : ${feel.swing.toFixed(1)}（@${S.bpm}bpm，後半拍落喺 ${((f * 60000) / S.bpm).toFixed(0)}ms）。`
+    : `${beats}/4 拍 × 2 = ${total} 格。呢個 feel 係平直嘅 — LONG 同 short 一樣長，後半拍就喺正中（50%）。`;
+}
+
+/** 排定一串「幾時要亮邊一格」嘅燈 */
+function scheduleLights(events) {
+  S.beatLights = events.filter((e) => Number.isFinite(e.t)).sort((a, b) => a.t - b.t);
+  if (!S.lightRaf) S.lightRaf = requestAnimationFrame(lightLoop);
+}
+
+function lightLoop() {
+  const now = audioNowMs();
+  const cells = $("counts") ? $("counts").children : [];
+  while (S.beatLights.length && S.beatLights[0].t <= now + 8) {
+    const ev = S.beatLights.shift();
+    const cell = cells[ev.slot];
+    if (cell) {
+      cell.classList.add("lit");
+      clearTimeout(cell._litT);
+      cell._litT = setTimeout(() => cell.classList.remove("lit"), 130);
+    }
+  }
+  S.lightRaf = S.beatLights.length ? requestAnimationFrame(lightLoop) : null;
+}
+
+function clearLights() {
+  S.beatLights = [];
+  if (S.lightRaf) { cancelAnimationFrame(S.lightRaf); S.lightRaf = null; }
+  if ($("counts")) for (const c of $("counts").children) c.classList.remove("lit");
 }
 
 /** 揀 feel 之後試聽一個 bar（未開始練習前） */
@@ -121,6 +181,11 @@ function previewFeel(feel) {
   S.queue.sort((a, b) => a.atSec - b.atSec);
   S.sched = setInterval(pumpQueue, 25);
   pumpQueue();
+  // 亮燈同一個 bar
+  scheduleLights([
+    { t: t0 - grid.beatMs, slot: 0 },
+    ...grid.targets.map((tg) => ({ t: t0 + tg.t, slot: tg.beat * 2 + (tg.kind === "off" ? 1 : 0) })),
+  ]);
   // 一個 bar 之後自動收工
   clearTimeout(S.previewEnd);
   S.previewEnd = setTimeout(() => { if (!S.running) stopAudio(); }, grid.barMs + 450);
@@ -190,6 +255,12 @@ function startSession({ testMode = false } = {}) {
   S.queue.sort((a, b) => a.atSec - b.atSec);
   if (!S.sched) S.sched = setInterval(pumpQueue, 25);
   pumpQueue();
+
+  // 亮燈：count-in 每一拍 + 所有目標音
+  scheduleLights([
+    ...Array.from({ length: countBeats }, (_, i) => ({ t: countStart + i * grid.beatMs, slot: i * 2 })),
+    ...targets.map((tg) => ({ t: tg.t, slot: tg.beat * 2 + (tg.kind === "off" ? 1 : 0) })),
+  ]);
 
   S.dots = new Map();
   buildLane();
@@ -399,7 +470,8 @@ function renderFeels() {
       $("bpmVal").textContent = `${f.bpm} bpm`;
       renderFeels();
       renderHint();
-      previewFeel(f); // 揀完即聽一個 bar
+      renderCounts(f);
+      previewFeel(f); // 揀完即聽一個 bar + 亮燈
     };
     el.appendChild(b);
   }
@@ -415,7 +487,7 @@ function renderHint() {
 }
 
 function bindUI() {
-  $("bpm").oninput = (e) => { S.bpm = +e.target.value; $("bpmVal").textContent = `${S.bpm} bpm`; renderHint(); };
+  $("bpm").oninput = (e) => { S.bpm = +e.target.value; $("bpmVal").textContent = `${S.bpm} bpm`; renderHint(); renderCounts(); };
   $("bars").oninput = (e) => { S.bars = +e.target.value; $("barsVal").textContent = `${S.bars} 小節`; renderHint(); };
   $("offset").oninput = (e) => {
     S.targetOffset = +e.target.value;
@@ -478,10 +550,21 @@ window.__spike = {
   }),
   preview: (feelId) => previewFeel(feelById(feelId || S.feelId)),
   stopAudio: () => stopAudio(),
+  lights: () => ({
+    pending: (S.beatLights || []).length,
+    lit: [...document.querySelectorAll("#counts .cnt")].filter((c) => c.classList.contains("lit")).map((c) => c.dataset.slot),
+  }),
+  counts: () => [...document.querySelectorAll("#counts .cnt")].map((c) => ({
+    slot: c.dataset.slot,
+    label: c.querySelector("b").textContent,
+    feel: c.querySelector("span").textContent,
+    muted: c.classList.contains("muted"),
+  })),
 };
 
 // boot
 renderFeels();
 renderHint();
+renderCounts();
 bindUI();
 try { S.hist = JSON.parse(localStorage.getItem("jazz-rhythm-hist") || "[]"); } catch {}

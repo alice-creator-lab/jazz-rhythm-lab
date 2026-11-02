@@ -121,7 +121,6 @@ Headless 驗證（`node spikes/003-prototype/test-headless.mjs`，真 Chrome）�
 ## 7. 實機回饋修正（iOS Safari）
 
 實際用家喺 Safari 試玩後報咗三個問題，已修並加測試（`spikes/003-prototype/test-audio-stop.mjs`）：
-
 1. **tap 變 double-tap 放大** → 打拍子區 `touch-action: none`、其餘 `manipulation`，加 `user-select: none`／`-webkit-touch-callout: none`。
    教訓：iOS Safari 嘅 double-tap zoom 唔受 `preventDefault()` 控制，只受 CSS `touch-action` 控制。
 2. **停咗仲有聲** → 原本 `finish()` 只 cancel 畫面 loop，已經排入 audio graph 嘅 click 同 `setInterval` scheduler 照跑。
@@ -131,7 +130,19 @@ Headless 驗證（`node spikes/003-prototype/test-headless.mjs`，真 Chrome）�
 
 驗證：`test-audio-stop.mjs` 量到 `touch-action` 係 `none`／`manipulation`、preview 一個 bar 後 queue／scheduler／oscillator 全部歸零、練習中途停同樣即刻歸零、停後 1.2 秒仍然零、0 個 JS error。
 
-## 8. 點跑
+## 8. 基本拍子計數 + 亮燈（第二次回饋）
+
+用家要一個「最基本」嘅視覺層：`1 & 2 & 3 & 4 &`，每格下面標 **LONG / short**，同埋揀 style 嘅時候要有燈睇得到拍點。
+
+- 頂部常駐「基本拍子計數」卡：每拍兩格（正拍 + 後半拍），拍號自動跟 feel（4/4 → 8 格、3/4 → 6 格）。
+- 格下面嘅字由 swing 比例計出嚟：`feel.swing > 1.05` → 正拍 `LONG`、後半拍 `short`；平直 feel（bossa / funk）→ 兩邊都 `even`。
+- 該 feel 冇打嘅位置（例如 spang-a-lang 嘅 1&、3&）會變暗，一睇就知 pattern 嘅形狀。
+- 亮燈由**音訊時鐘**驅動（唔係 setTimeout）：`scheduleLights()` 記住每個 click 嘅 audio 時間，rAF 比較 `audioNowMs()` 去亮格，所以燈同聲係同一個時基。正拍亮琥珀色、後半拍亮綠松色，LONG/short 嘅分別一眼睇得出。
+- 揀 chip → 一聲音拍 + 一個 bar 嘅示範 + 同步亮燈，一個 bar 後自動停；練習時 count-in 同每一粒目標音都會亮。
+
+測試 `test-counts.mjs`（真 Chrome）：4/4 = 8 格、標籤 `1&2&3&4&`、LONG/short 逐格交替；華爾茲 = 6 格；bossa 全部 `even`；預覽 3.4 秒內亮燈 15 次、覆蓋 6 個唔同格、完結後 0 個殘留；0 JS error。390px 闊亦做過目視檢查（媒體查詢收細字級，冇橫向溢出）。
+
+## 9. 點跑
 
 
 ```bash
@@ -140,6 +151,7 @@ python3 -m http.server 8799        # 開 http://127.0.0.1:8799/
 node spikes/002-scoring/sim.mjs    # 評分模型模擬（唔需要瀏覽器）
 node spikes/003-prototype/test-headless.mjs   # 真 Chrome 端到端斷言（需要上面個 server）
 node spikes/003-prototype/test-audio-stop.mjs # touch-action / 停聲 / 一個 bar 示範
+node spikes/003-prototype/test-counts.mjs     # 計數格 + LONG/short + 亮燈
 node spikes/003-prototype/shots.mjs           # 影截圖去 shots/
 ```
 

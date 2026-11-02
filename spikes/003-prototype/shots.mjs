@@ -11,6 +11,8 @@ const PORT = Number(process.env.CDP_PORT || 9341);
 const URL = "http://127.0.0.1:8799/index.html";
 const OUT = `${homedir()}/.hermes/profiles/friend/workspace/jazz-rhythm-spike/shots`;
 mkdirSync(OUT, { recursive: true });
+const W = Number(process.env.W || 900);
+const SUFFIX = process.env.SUFFIX || "";
 
 const child = spawn(CHROME, [
   "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
@@ -60,10 +62,12 @@ const shot = async (name) => {
 
 await send("Page.enable");
 await send("Runtime.enable");
-await send("Emulation.setDeviceMetricsOverride", { width: 900, height: 1500, deviceScaleFactor: 2, mobile: false });
+await send("Emulation.setDeviceMetricsOverride", { width: W, height: 1500, deviceScaleFactor: 2, mobile: W < 600 });
 await send("Page.navigate", { url: URL });
 await sleep(1800);
-await shot("01-setup");
+const overflow = await evalJs(`({ sw: document.documentElement.scrollWidth, iw: window.innerWidth })`);
+if (overflow.sw > overflow.iw + 1) console.log("WARN 橫向溢出:", JSON.stringify(overflow));
+await shot(`01-setup${SUFFIX}`);
 
 // 開始練習，等 count-in 過，然後只補頭幾拍嘅 tap（睇得到綠點）
 await evalJs(`(async () => {
@@ -80,7 +84,7 @@ await evalJs(`(async () => {
   return 'ok';
 })()`);
 await sleep(300);
-await shot("02-session");
+await shot(`02-session${SUFFIX}`);
 
 await evalJs(`(async () => {
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -96,7 +100,7 @@ await evalJs(`(async () => {
   return __spike.result().total;
 })()`);
 await sleep(400);
-await shot("03-result");
+await shot(`03-result${SUFFIX}`);
 
 ws.close(); cleanup();
 process.exit(0);
