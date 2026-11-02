@@ -16,6 +16,7 @@ const S = {
   bars: 4,
   targetOffset: 0,
   subdiv: false,
+  openGroups: new Set(),
   calibMs: 0,
   calibrated: false,
   ctx: null,
@@ -525,7 +526,7 @@ function finish() {
 
   const c = ensureCtx();
   $("clockInfo").textContent =
-    `v11 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
+    `v12 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
 
   S.hist.push({ t: Date.now(), feel: s.feel.id, bpm: s.bpm, total: r.total, grade: r.grade, pocket: r.pocketMs, sigma: r.sigmaMs, ratio: r.swingRatio });
   S.hist = S.hist.slice(-12);
@@ -554,32 +555,48 @@ function renderHist() {
 function renderFeels() {
   const el = $("feels");
   el.innerHTML = "";
-  let grid = null, group = null;
-  for (const f of FEELS) {
-    if (f.group !== group) {
-      group = f.group;
-      const h = document.createElement("div");
-      h.className = "gname";
-      h.textContent = group;
-      el.appendChild(h);
-      grid = document.createElement("div");
-      grid.className = "feelgrid";
-      el.appendChild(grid);
-    }
-    const b = document.createElement("button");
-    b.className = "feel" + (f.id === S.feelId ? " on" : "");
-    b.innerHTML = `<b>${f.name}</b><small>${f.sub}</small>`;
-    b.onclick = () => {
-      // 揀 style 唔再自動示範（要聽就撳「試聽 2 小節」）
-      S.feelId = f.id;
-      S.bpm = f.bpm;
-      $("bpm").value = f.bpm;
-      $("bpmVal").textContent = `${f.bpm} bpm`;
+  const groups = [];
+  for (const f of FEELS) if (!groups.includes(f.group)) groups.push(f.group);
+  const cur = FEELS.find((f) => f.id === S.feelId);
+
+  for (const g of groups) {
+    const open = S.openGroups.has(g);
+    const wrap = document.createElement("div");
+    wrap.className = "fgroup" + (open ? " open" : "");
+
+    const head = document.createElement("button");
+    head.className = "ghead";
+    head.innerHTML = `<span class="caret">${open ? "▾" : "▸"}</span>${g}` +
+      (cur && cur.group === g ? `<span class="cur">${cur.name}</span>` : "");
+    head.onclick = () => {
+      if (S.openGroups.has(g)) S.openGroups.delete(g); else S.openGroups.add(g);
       renderFeels();
-      renderHint();
-      renderCounts(f);
     };
-    grid.appendChild(b);
+    wrap.appendChild(head);
+
+    if (open) {
+      const grid = document.createElement("div");
+      grid.className = "feelgrid";
+      for (const f of FEELS.filter((x) => x.group === g)) {
+        const b = document.createElement("button");
+        b.className = "feel" + (f.id === S.feelId ? " on" : "");
+        b.innerHTML = `<b>${f.name}</b><small>${f.sub}</small>`;
+        b.onclick = () => {
+          S.feelId = f.id;
+          S.bpm = f.bpm;
+          $("bpm").value = f.bpm;
+          $("bpmVal").textContent = `${f.bpm} bpm`;
+          S.openGroups.add(g);
+          renderFeels();
+          renderHint();
+          renderCounts(f);
+          previewFeel(f); // 揀 pattern 即示範 2 小節
+        };
+        grid.appendChild(b);
+      }
+      wrap.appendChild(grid);
+    }
+    el.appendChild(wrap);
   }
 }
 

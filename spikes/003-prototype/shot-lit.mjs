@@ -59,6 +59,7 @@ await send("Page.navigate", { url: URL });
 await sleep(1500);
 
 // 揀「基本 A」→ 計數格顯示 1、2&、3、4
+await evalJs(`[...document.querySelectorAll('.ghead')].find(h => h.textContent.includes('基礎')).click()`);
 await evalJs(`[...document.querySelectorAll('.feel')].find(b => b.textContent.includes('基本 A')).click()`);
 await sleep(120);
 const shotAll = async (name) => {

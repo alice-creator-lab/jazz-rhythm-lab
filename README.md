@@ -255,3 +255,10 @@ node spikes/003-prototype/shots.mjs           # 影截圖去 shots/
 | **細分 tick** | pattern 只打幾格，中間冇聲就會失去格位 | 練新 pattern 初期 | 練熟之後（會依賴參考聲） |
 
 UI 上收埋入 `<details class="adv">「進階（多數情況唔使理）」`，主畫面只剩：揀 pattern → 速度 → 小節數 → 試聽／開始。每個選項下面加一句「幾時用」。
+
+## 16. 第九次回饋：分組摺疊 + 揀 pattern 自動示範
+
+- 三個 group（基礎／進階／其他風格）預設**全部收起**，撳 group header 才展開；header 右邊會顯示該組現時揀緊邊個 pattern（例如「基礎 · 基本 A」），所以收起都知自己喺邊。
+- **揀 chip 會自動示範 2 小節**（連亮燈），同之前一樣；`試聽 2 小節` 掣保留，方便重聽同一個。
+- `renderFeels()` 用 `S.openGroups`（Set）記住邊組開住，重繪完唔會彈返去收起。
+- 測試加咗：開機時 3 個 header、0 個 chip（全收起）、撳「基礎」後有 4 個 chip 且第一個係基本 A；揀 chip 之後即刻排 12 盞燈（中速 Swing 2 bars × 6）。

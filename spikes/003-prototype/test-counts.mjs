@@ -70,6 +70,21 @@ check(bootSync.slider === String(bootSync.stateBpm), `速度 slider 應該同步
 check(bootSync.label === `${bootSync.stateBpm} bpm`, `bpm 標籤應該係 ${bootSync.stateBpm} bpm，實際 ${bootSync.label}`);
 check(bootSync.feel === "basic-a", `預設 feel 應該係基礎 A，實際 ${bootSync.feel}`);
 
+// --- 0b. 分組：一開始全部收起，撳 group header 才展開
+const groupsBoot = await evalJs(`({
+  heads: [...document.querySelectorAll('.ghead')].map(h => h.textContent.trim()),
+  chips: document.querySelectorAll('.feel').length,
+})`);
+check(groupsBoot.heads.length === 3, `應該有 3 個 group header，實際 ${JSON.stringify(groupsBoot.heads)}`);
+check(groupsBoot.chips === 0, `一開始所有 group 應該收起（0 個 chip），實際 ${groupsBoot.chips}`);
+const openedBasic = await evalJs(`(() => {
+  [...document.querySelectorAll('.ghead')].find(h => h.textContent.includes('基礎')).click();
+  const chips = [...document.querySelectorAll('.feel')].map(b => b.querySelector('b').textContent);
+  return { chips, heads: document.querySelectorAll('.ghead').length };
+})()`);
+check(openedBasic.chips.length === 4, `撳「基礎」應該展開 4 個 chip，實際 ${JSON.stringify(openedBasic.chips)}`);
+check(openedBasic.chips[0] === "基本 A", `第一個應該係基本 A，實際 ${openedBasic.chips[0]}`);
+
 // --- 1. 4/4 swing 嘅計數格
 const swing = await evalJs(`__spike.counts()`);
 check(swing.length === 8, `4/4 應該 8 格，實際 ${swing.length}`);
@@ -79,6 +94,7 @@ check(swing.every((c, i) => c.feel === (i % 2 ? "short" : "LONG")), "LONG/short 
 
 // --- 2. 揀 chip（華爾茲）→ 6 格，拍號跟足
 const waltz = await evalJs(`(async () => {
+  for (let i = 0; i < 5; i++) { const c = [...document.querySelectorAll('.ghead')].find(h => !h.parentElement.classList.contains('open')); if (!c) break; c.click(); }
   [...document.querySelectorAll('.feel')].find(b => b.textContent.includes('Jazz Waltz')).click();
   await new Promise(r => setTimeout(r, 120));
   return { counts: __spike.counts(), hint: document.getElementById('countHint').textContent };
@@ -99,12 +115,10 @@ check(/平直/.test(bossa.hint), `bossa hint 應該講平直，實際：${bossa.
 
 // --- 4. 兩個 bar 示範 + 冇數拍 click + 亮燈
 const lit = await evalJs(`(async () => {
+  for (let i = 0; i < 5; i++) { const c = [...document.querySelectorAll('.ghead')].find(h => !h.parentElement.classList.contains('open')); if (!c) break; c.click(); }
   const chip = [...document.querySelectorAll('.feel')].find(b => b.textContent.includes('中速 Swing'));
   chip.click();
-  await new Promise(r => setTimeout(r, 60));
-  const afterChipClick = __spike.lights().pending;   // 揀 style 應該唔再自動示範
-  document.getElementById('auditionBtn').click();
-  const first = __spike.lights().pending;   // 2 bars × 6 粒 = 12，多一粒就代表仲有數拍 click
+  const first = __spike.lights().pending;   // 自動示範 2 bars × 6 粒 = 12（多一粒 = 仲有數拍 click）
   const seen = new Set();
   let frames = 0;
   const t0 = performance.now();
@@ -115,9 +129,8 @@ const lit = await evalJs(`(async () => {
     await new Promise(r => setTimeout(r, 60));
   }
   await new Promise(r => setTimeout(r, 900));  // 等自動收工
-  return { afterChipClick, firstPending: first, litFrames: frames, slotsSeen: [...seen].sort(), pending: __spike.lights().pending, audio: __spike.audio() };
+  return { firstPending: first, litFrames: frames, slotsSeen: [...seen].sort(), pending: __spike.lights().pending, audio: __spike.audio() };
 })()`);
-check(lit.afterChipClick === 0, `揀 style 唔應該再自動示範，實際排咗 ${lit.afterChipClick} 盞燈`);
 check(lit.firstPending === 12, `示範應該排 2 bars × 6 = 12 盞燈（冇數拍），實際 ${lit.firstPending}`);
 check(lit.litFrames >= 5, `預覽期間應該見到多次亮燈，實際 ${lit.litFrames} 次`);
 check(lit.slotsSeen.length >= 4, `應該亮過至少 4 個唔同格，實際 ${JSON.stringify(lit.slotsSeen)}`);
@@ -142,6 +155,7 @@ const sub = await evalJs(`(async () => {
 check(sub.off.queue === sub.off.targets + 4, `冇開細分 tick 時 queue 應該 = 目標 + 4 下 count-in，實際 ${sub.off.queue} vs ${sub.off.targets}`);
 check(sub.on.queue >= sub.off.queue + 8, `開咗細分 tick 應該多咗 8 粒參考聲（每 bar 4 粒漏空），實際 ${sub.off.queue} → ${sub.on.queue}`);
 const basicA = await evalJs(`(async () => {
+  for (let i = 0; i < 5; i++) { const c = [...document.querySelectorAll('.ghead')].find(h => !h.parentElement.classList.contains('open')); if (!c) break; c.click(); }
   [...document.querySelectorAll('.feel')].find(b => b.textContent.includes('基本 A')).click();
   await new Promise(r => setTimeout(r, 100));
   const c = __spike.counts();
@@ -149,16 +163,17 @@ const basicA = await evalJs(`(async () => {
 })()`);
 check(basicA.labels === "1&2&3&4&", `基本 A 標籤錯：${basicA.labels}`);
 check(basicA.played.join(",") === "0,3,4,6", `基本 A 應該淨係打 1、2&、3、4（slots 0,3,4,6），實際 ${basicA.played.join(",")}`);
-check(basicA.pending === 0, `揀 chip 唔應該自動示範（0 盞燈），實際 ${basicA.pending}`);
+check(basicA.pending === 8, `揀基本 A 應該自動示範 2 bars × 4 粒 = 8 盞燈，實際 ${basicA.pending}`);
 
 const basicB = await evalJs(`(async () => {
+  for (let i = 0; i < 5; i++) { const c = [...document.querySelectorAll('.ghead')].find(h => !h.parentElement.classList.contains('open')); if (!c) break; c.click(); }
   [...document.querySelectorAll('.feel')].find(b => b.textContent.includes('基本 B')).click();
   await new Promise(r => setTimeout(r, 100));
   const c = __spike.counts();
   return { played: c.filter(x => !x.muted).map(x => x.slot), pending: __spike.lights().pending };
 })()`);
 check(basicB.played.join(",") === "0,2,5,6", `基本 B 應該淨係打 1、2、3&、4（slots 0,2,5,6），實際 ${basicB.played.join(",")}`);
-check(basicB.pending === 0, `揀 chip 唔應該自動示範（0 盞燈），實際 ${basicB.pending}`);
+check(basicB.pending === 8, `揀基本 B 應該自動示範 8 盞燈，實際 ${basicB.pending}`);
 
 check(pageErrors.length === 0, `page errors: ${pageErrors.join(" | ")}`);
 

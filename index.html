@@ -33,8 +33,11 @@
 
   /* felt chips */
   .feels{display:block}
-  .feels .gname{font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin:12px 0 6px}
-  .feels .gname:first-child{margin-top:0}
+  .ghead{display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:8px;color:var(--ink);font:inherit;font-size:13.5px;cursor:pointer}
+  .fgroup:first-child .ghead{margin-top:0}
+  .ghead .caret{color:var(--muted);font-size:10px}
+  .ghead .cur{margin-left:auto;color:var(--accent);font-size:11.5px;font-weight:600}
+  .fgroup.open .ghead{border-color:#3a4a5d}
   .feelgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(124px,1fr));gap:8px}
   .feel{
     background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 11px;
@@ -148,7 +151,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Jazz 拍子實驗室 <span>· swing feel 練習</span> <span class="ver" id="verTag">v11</span></h1>
+    <h1>Jazz 拍子實驗室 <span>· swing feel 練習</span> <span class="ver" id="verTag">v12</span></h1>
     <p>唔係「啱唔啱拍子」咁簡單 — 練嘅係 <b>後半拍擺喺邊</b>（swing ratio）、<b>每一下穩唔穩</b>（σ）、同 <b>整體拉後幾多</b>（pocket）。</p>
   </header>
 
