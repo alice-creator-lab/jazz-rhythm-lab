@@ -15,6 +15,7 @@ const S = {
   bpm: 120,
   bars: 4,
   targetOffset: 0,
+  subdiv: false,
   calibMs: 0,
   calibrated: false,
   ctx: null,
@@ -67,26 +68,45 @@ const audioNowMs = () => perfToAudioMs(performance.now());
 // 所有仍然存在嘅發聲源；停嘅時候要即刻收聲（iOS 上尤其緊要）
 const activeOsc = new Set();
 
-function click(atSec, accent, vol = 1) {
+/**
+ * 一種 click 音：LONG（正拍）低、長、厚；short（後半拍）高、短促；sub（細分參考）最細聲。
+ * 用音色去分長短，係為咗「短後面接長」呢種位置聽得返出嚟。
+ */
+function click(atSec, { accent = false, vol = 1, kind = "on" } = {}) {
   const c = ensureCtx();
   if (!Number.isFinite(atSec) || atSec < 0) return;
   const when = Math.max(atSec, c.currentTime + 0.001); // 唔好排去過去
   const g = c.createGain();
   g.connect(c.destination);
   const o1 = c.createOscillator(), o2 = c.createOscillator();
-  o1.type = "triangle"; o1.frequency.value = accent ? 1150 : 830;
-  o2.type = "sine"; o2.frequency.value = accent ? 2300 : 1660;
+  const long = kind === "on", sub = kind === "sub";
+  o1.type = "triangle";
+  o1.frequency.value = accent ? 1150 : long ? 660 : sub ? 1500 : 1040;
+  o2.type = "sine";
+  o2.frequency.value = accent ? 2300 : long ? 1320 : sub ? 3000 : 2080;
   o1.connect(g); o2.connect(g);
+  const decay = sub ? 0.022 : long ? 0.10 : 0.038;
+  const peak = (accent ? 0.85 : long ? 0.5 : sub ? 0.16 : 0.42) * vol;
   g.gain.setValueAtTime(0.0001, when);
-  g.gain.linearRampToValueAtTime((accent ? 0.85 : 0.5) * vol, when + 0.002);
-  g.gain.exponentialRampToValueAtTime(0.0006, when + 0.085);
+  g.gain.linearRampToValueAtTime(peak, when + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0006, when + decay);
   o1.start(when); o2.start(when);
-  o1.stop(when + 0.12); o2.stop(when + 0.12);
+  o1.stop(when + decay + 0.04); o2.stop(when + decay + 0.04);
   activeOsc.add(o1); activeOsc.add(o2);
   o1.onended = () => {
     activeOsc.delete(o1); activeOsc.delete(o2);
     try { g.disconnect(); } catch {}
   };
+}
+
+function pumpQueue() {
+  const c = ensureCtx();
+  const now = c.currentTime;
+  // lookahead 150ms：就算 main thread 卡一下都唔會甩拍
+  while (S.queue.length && S.queue[0].atSec < now + 0.15) {
+    const ev = S.queue.shift();
+    click(ev.atSec, { accent: ev.accent, vol: ev.vol ?? 1, kind: ev.kind ?? "on" });
+  }
 }
 
 /** 即刻收聲：清 queue、停所有已排程嘅 oscillator、停 scheduler。 */
@@ -99,16 +119,6 @@ function stopAudio() {
     try { o.disconnect(); } catch {}
   }
   activeOsc.clear();
-}
-
-function pumpQueue() {
-  const c = ensureCtx();
-  const now = c.currentTime;
-  // lookahead 150ms：就算 main thread 卡一下都唔會甩拍
-  while (S.queue.length && S.queue[0].atSec < now + 0.15) {
-    const ev = S.queue.shift();
-    click(ev.atSec, ev.accent, ev.vol ?? 1);
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -183,6 +193,7 @@ function previewFeel(feel) {
       atSec: (t0 + tg.t) / 1000,
       accent: tg.kind === "on" && tg.beat === 0,
       vol: tg.kind === "off" ? 0.62 : 1,
+      kind: tg.kind,
     });
   }
   S.queue.sort((a, b) => a.atSec - b.atSec);
@@ -253,9 +264,30 @@ function startSession({ testMode = false } = {}) {
   S.queue = [];
   const countStart = t0 - countBeats * grid.beatMs;
   for (let i = 0; i < countBeats; i++) {
-    S.queue.push({ atSec: (countStart + i * grid.beatMs) / 1000, accent: i === 0 });
+    S.queue.push({ atSec: (countStart + i * grid.beatMs) / 1000, accent: i === 0, kind: "on" });
   }
-  for (const tg of targets) S.queue.push({ atSec: tg.t / 1000, accent: tg.kind === "on" && tg.beat % 4 === 0 });
+  for (const tg of targets) {
+    S.queue.push({
+      atSec: tg.t / 1000,
+      accent: tg.kind === "on" && tg.beat % 4 === 0,
+      kind: tg.kind,
+    });
+  }
+  // 細分參考 tick：每個「格」（1 & 2 & 3 & 4 &）都有聲，但 pattern 冇打嘅位置只係細細聲
+  // —— 用嚟聽得返「短」同「長」之間嗰個位。
+  if (S.subdiv) {
+    const f = swingOffset(feel.swing);
+    for (let b = 0; b < S.bars; b++) {
+      for (let beat = 0; beat < feel.beatsPerBar; beat++) {
+        for (const kind of ["on", "off"]) {
+          const tt = t0 + b * grid.barMs + (beat + (kind === "off" ? f : 0)) * grid.beatMs;
+          if (!targets.some((tg) => Math.abs(tg.t - tt) < 12)) {
+            S.queue.push({ atSec: tt / 1000, kind: "sub" });
+          }
+        }
+      }
+    }
+  }
   S.queue.sort((a, b) => a.atSec - b.atSec);
   if (!S.sched) S.sched = setInterval(pumpQueue, 25);
   pumpQueue();
@@ -406,9 +438,12 @@ function updateLive() {
   $("sPocket").textContent = r.pocketMs === null ? "—" : `${r.pocketMs > 0 ? "+" : ""}${r.pocketMs}`;
   $("sSigma").textContent = r.sigmaMs === null ? "—" : `${r.sigmaMs}`;
   $("sRatio").textContent = r.swingRatio === null ? "—" : `1 : ${r.swingRatio}`;
-  $("alignWarn").innerHTML = r.alignMs
-    ? `已自動對齊 <b>${r.alignMs > 0 ? "遲" : "早"} ${Math.abs(r.alignMs)} ms</b>（多數係耳機／裝置延遲）— 建議撳「校準」`
-    : "";
+  const parts = [`已收 ${s.taps.length} / 目標 ${s.targets.length} 下`];
+  if (r.alignMs) {
+    parts.push(`已自動對齊 <b>${r.alignMs > 0 ? "遲" : "早"} ${Math.abs(r.alignMs)} ms</b>（多數係耳機延遲）`);
+  }
+  if (s.chordIgnored) parts.push(`合併咗 ${s.chordIgnored} 下（當和弦）`);
+  $("alignWarn").innerHTML = parts.join(" · ");
 }
 
 function flashPad(source) {
@@ -463,7 +498,7 @@ function finish() {
 
   const c = ensureCtx();
   $("clockInfo").textContent =
-    `v6 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
+    `v7 · 時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
 
   S.hist.push({ t: Date.now(), feel: s.feel.id, bpm: s.bpm, total: r.total, grade: r.grade, pocket: r.pocketMs, sigma: r.sigmaMs, ratio: r.swingRatio });
   S.hist = S.hist.slice(-12);
@@ -524,7 +559,8 @@ function bindUI() {
   $("bars").oninput = (e) => { S.bars = +e.target.value; $("barsVal").textContent = `${S.bars} 小節`; renderHint(); };
   $("offset").oninput = (e) => {
     S.targetOffset = +e.target.value;
-    $("offsetVal").textContent = S.targetOffset === 0 ? "0 ms" : `${S.targetOffset > 0 ? "+" : ""}${S.targetOffset} ms`;
+    $("subdiv").addEventListener("change", (e) => { S.subdiv = e.target.checked; });
+  $("offsetVal").textContent = S.targetOffset === 0 ? "0 ms" : `${S.targetOffset > 0 ? "+" : ""}${S.targetOffset} ms`;
     renderHint();
   };
   $("calibBtn").onclick = () => { ensureCtx().resume(); runCalibration(); };

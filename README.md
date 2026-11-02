@@ -187,7 +187,24 @@ Headless 驗證（`node spikes/003-prototype/test-headless.mjs`，真 Chrome）�
 
 測試 `test-touch.mjs`（iPhone 模擬：390×844、dpr 3、touch emulation）：viewport 有 `maximum-scale=1`、練習中 `body` 同 pad 都係 `touch-action:none`、pad／lane 嘅 `touchstart` 被 `preventDefault`、停掣唔會被攔、撳 lane 計得到一下 tap、收工後 `playing` class 移除、0 JS error。
 
-## 11. 點跑
+## 11. 第五次回饋：「短後面個長就 sense 唔到」
+
+用家講嘅位置係 `LONG short LONG LONG` 裡面 2& → 3 嗰下（110bpm 只差 182ms）。呢個位有兩個可能成因，兩個都補咗：
+
+**(A) 聽唔出／感覺唔到**——之前所有 click 音色一模一樣，短同長之間得 182ms，好易糊成一嚿。而家 click 音色跟 pattern 走：
+- `on`（LONG）→ 660Hz + 1320Hz、衰減 100ms，低、長、厚
+- `off`（short）→ 1040Hz + 2080Hz、衰減 38ms，高、短促
+- `sub`（細分參考）→ 1500Hz 單音、衰減 22ms、音量 0.16
+
+另外加咗 **「細分 tick」開關**：開咗之後 `1 & 2 & 3 & 4 &` 每一格都有聲（pattern 冇打嘅格用細細聲嘅 `sub`），所以「短」同「長」之間嗰格聽得到，唔會斷咗條線。
+
+**(B) app 收唔到嗰下拍**——練習中新增 `已收 N / 目標 M 下`（同埋 `合併咗 N 下（當和弦）`）。咁就可以一眼分得出係「app 冇收到」定「收到但評錯」。
+
+順帶查過嘅嘢（都唔係成因）：`scoreSession` 對 2& → 3 冇系統性偏差（模擬 4 小節人性抖動：0 漏拍、總分 80.7）；自動對齊喺 σ=30/38/45 之下 40 個種子全部冇誤觸發（σ=55 只有 1/40 跳到 50ms）。
+
+版面：LONG 點喺上排（top 46px）、short 點喺下排（top 74px），最短間隔 182ms 喺 390px 機身大約 14px 水平 + 28px 垂直，仍然分得開。
+
+## 12. 點跑
 
 
 ```bash

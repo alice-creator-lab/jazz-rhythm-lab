@@ -138,7 +138,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Jazz 拍子實驗室 <span>· swing feel 練習</span> <span class="ver" id="verTag">v6</span></h1>
+    <h1>Jazz 拍子實驗室 <span>· swing feel 練習</span> <span class="ver" id="verTag">v7</span></h1>
     <p>唔係「啱唔啱拍子」咁簡單 — 練嘅係 <b>後半拍擺喺邊</b>（swing ratio）、<b>每一下穩唔穩</b>（σ）、同 <b>整體拉後幾多</b>（pocket）。</p>
   </header>
 
@@ -166,6 +166,11 @@
       <label>目標偏移</label>
       <input type="range" id="offset" min="-50" max="50" step="5" value="0">
       <div class="val" id="offsetVal">0 ms</div>
+    </div>
+    <div class="row">
+      <label>細分 tick</label>
+      <input type="checkbox" id="subdiv" style="width:auto;flex:0 0 auto">
+      <div class="val" style="flex:0 0 auto">1 &amp; 2 &amp; 3 &amp; 4 &amp; 每格都有細聲參考</div>
     </div>
     <div class="hint" id="feelHint"></div>
 

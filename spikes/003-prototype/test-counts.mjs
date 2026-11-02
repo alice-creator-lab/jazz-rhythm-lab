@@ -108,7 +108,23 @@ check(lit.slotsSeen.length >= 4, `應該亮過至少 4 個唔同格，實際 ${J
 check(lit.pending === 0, `兩個 bar 之後燈應該燒完，實際仲有 ${lit.pending}`);
 check(lit.audio.queue === 0 && !lit.audio.schedActive, `示範完應該收聲，實際 ${JSON.stringify(lit.audio)}`);
 
-// --- 5. 兩個新嘅基本節奏 pattern
+// --- 6. 細分 tick（1 & 2 & 3 & 4 & 每格都有參考聲）
+const sub = await evalJs(`(async () => {
+  __spike.state.subdiv = false;
+  __spike.state.feelId = 'basic-a'; __spike.state.bpm = 110; __spike.state.bars = 2;
+  __spike.start();
+  const off = { queue: __spike.state.queue.length, targets: __spike.state.session.targets.length };
+  __spike.stopAudio(); __spike.finish();
+  await new Promise(r => setTimeout(r, 200));
+  __spike.state.subdiv = true;
+  __spike.start();
+  const on = { queue: __spike.state.queue.length };
+  __spike.stopAudio(); __spike.finish();
+  __spike.state.subdiv = false;
+  return { off, on };
+})()`);
+check(sub.off.queue === sub.off.targets + 4, `冇開細分 tick 時 queue 應該 = 目標 + 4 下 count-in，實際 ${sub.off.queue} vs ${sub.off.targets}`);
+check(sub.on.queue >= sub.off.queue + 8, `開咗細分 tick 應該多咗 8 粒參考聲（每 bar 4 粒漏空），實際 ${sub.off.queue} → ${sub.on.queue}`);
 const basicA = await evalJs(`(async () => {
   [...document.querySelectorAll('.feel')].find(b => b.textContent.includes('基本節奏 A')).click();
   await new Promise(r => setTimeout(r, 100));
