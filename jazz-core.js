@@ -13,6 +13,16 @@
 // ---------------------------------------------------------------------------
 export const FEELS = [
   {
+    id: "basic-a", name: "基本節奏 A", sub: "LONG short LONG LONG（1 2& 3 4）",
+    beatsPerBar: 4, bars: 2, swing: 2.0, bpm: 110,
+    pattern: [[0, "on"], [1, "off"], [2, "on"], [3, "on"]],
+  },
+  {
+    id: "basic-b", name: "基本節奏 B", sub: "LONG LONG short LONG（1 2 3& 4）",
+    beatsPerBar: 4, bars: 2, swing: 2.0, bpm: 110,
+    pattern: [[0, "on"], [1, "on"], [2, "off"], [3, "on"]],
+  },
+  {
     id: "swing-med", name: "中速 Swing", sub: "spang-a-lang ride pattern",
     beatsPerBar: 4, bars: 2, swing: 2.0, bpm: 110,
     pattern: [[0, "on"], [1, "on"], [1, "off"], [2, "on"], [3, "on"], [3, "off"]],

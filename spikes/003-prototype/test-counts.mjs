@@ -86,22 +86,47 @@ check(bossa.counts.length === 8, `bossa 應該 8 格，實際 ${bossa.counts.len
 check(bossa.counts.every((c) => c.feel === "even"), `bossa 應該全部 even，實際 ${bossa.counts.map((c) => c.feel).join(",")}`);
 check(/平直/.test(bossa.hint), `bossa hint 應該講平直，實際：${bossa.hint}`);
 
-// --- 4. 揀 chip 之後有亮燈（燈 = 拍點視覺化）
+// --- 4. 兩個 bar 示範 + 冇數拍 click + 亮燈
 const lit = await evalJs(`(async () => {
   [...document.querySelectorAll('.feel')].find(b => b.textContent.includes('中速 Swing')).click();
+  const first = __spike.lights().pending;   // 2 bars × 6 粒 = 12，多一粒就代表仲有數拍 click
   const seen = new Set();
   let frames = 0;
   const t0 = performance.now();
-  while (performance.now() - t0 < 3400) {
+  while (performance.now() - t0 < 7000) {
     const l = __spike.lights();
     if (l.lit.length) { frames++; l.lit.forEach(s => seen.add(s)); }
+    if (l.pending === 0 && frames > 3) break;
     await new Promise(r => setTimeout(r, 60));
   }
-  return { litFrames: frames, slotsSeen: [...seen].sort(), pending: __spike.lights().pending };
+  await new Promise(r => setTimeout(r, 900));  // 等自動收工
+  return { firstPending: first, litFrames: frames, slotsSeen: [...seen].sort(), pending: __spike.lights().pending, audio: __spike.audio() };
 })()`);
-check(lit.litFrames >= 3, `預覽期間應該見到多次亮燈，實際 ${lit.litFrames} 次`);
+check(lit.firstPending === 12, `示範應該排 2 bars × 6 = 12 盞燈（冇數拍），實際 ${lit.firstPending}`);
+check(lit.litFrames >= 5, `預覽期間應該見到多次亮燈，實際 ${lit.litFrames} 次`);
 check(lit.slotsSeen.length >= 4, `應該亮過至少 4 個唔同格，實際 ${JSON.stringify(lit.slotsSeen)}`);
-check(lit.pending === 0, `一個 bar 之後燈應該燒完，實際仲有 ${lit.pending}`);
+check(lit.pending === 0, `兩個 bar 之後燈應該燒完，實際仲有 ${lit.pending}`);
+check(lit.audio.queue === 0 && !lit.audio.schedActive, `示範完應該收聲，實際 ${JSON.stringify(lit.audio)}`);
+
+// --- 5. 兩個新嘅基本節奏 pattern
+const basicA = await evalJs(`(async () => {
+  [...document.querySelectorAll('.feel')].find(b => b.textContent.includes('基本節奏 A')).click();
+  await new Promise(r => setTimeout(r, 100));
+  const c = __spike.counts();
+  return { played: c.filter(x => !x.muted).map(x => x.slot), labels: c.map(x => x.label).join(''), pending: __spike.lights().pending };
+})()`);
+check(basicA.labels === "1&2&3&4&", `基本節奏 A 標籤錯：${basicA.labels}`);
+check(basicA.played.join(",") === "0,3,4,6", `基本節奏 A 應該淨係打 1、2&、3、4（slots 0,3,4,6），實際 ${basicA.played.join(",")}`);
+check(basicA.pending === 8, `2 bars × 4 粒 = 8 盞燈，實際 ${basicA.pending}`);
+
+const basicB = await evalJs(`(async () => {
+  [...document.querySelectorAll('.feel')].find(b => b.textContent.includes('基本節奏 B')).click();
+  await new Promise(r => setTimeout(r, 100));
+  const c = __spike.counts();
+  return { played: c.filter(x => !x.muted).map(x => x.slot), pending: __spike.lights().pending };
+})()`);
+check(basicB.played.join(",") === "0,2,5,6", `基本節奏 B 應該淨係打 1、2、3&、4（slots 0,2,5,6），實際 ${basicB.played.join(",")}`);
+check(basicB.pending === 8, `基本節奏 B 應該 8 盞燈，實際 ${basicB.pending}`);
 
 check(pageErrors.length === 0, `page errors: ${pageErrors.join(" | ")}`);
 

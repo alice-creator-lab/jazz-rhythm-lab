@@ -138,9 +138,18 @@ Headless 驗證（`node spikes/003-prototype/test-headless.mjs`，真 Chrome）�
 - 格下面嘅字由 swing 比例計出嚟：`feel.swing > 1.05` → 正拍 `LONG`、後半拍 `short`；平直 feel（bossa / funk）→ 兩邊都 `even`。
 - 該 feel 冇打嘅位置（例如 spang-a-lang 嘅 1&、3&）會變暗，一睇就知 pattern 嘅形狀。
 - 亮燈由**音訊時鐘**驅動（唔係 setTimeout）：`scheduleLights()` 記住每個 click 嘅 audio 時間，rAF 比較 `audioNowMs()` 去亮格，所以燈同聲係同一個時基。正拍亮琥珀色、後半拍亮綠松色，LONG/short 嘅分別一眼睇得出。
-- 揀 chip → 一聲音拍 + 一個 bar 嘅示範 + 同步亮燈，一個 bar 後自動停；練習時 count-in 同每一粒目標音都會亮。
+- 揀 chip → **兩個 bar** 嘅示範（唔加數拍，第一下就係第一拍）+ 同步亮燈，兩個 bar 後自動停；練習時 count-in 同每一粒目標音都會亮。
 
-測試 `test-counts.mjs`（真 Chrome）：4/4 = 8 格、標籤 `1&2&3&4&`、LONG/short 逐格交替；華爾茲 = 6 格；bossa 全部 `even`；預覽 3.4 秒內亮燈 15 次、覆蓋 6 個唔同格、完結後 0 個殘留；0 JS error。390px 闊亦做過目視檢查（媒體查詢收細字級，冇橫向溢出）。
+兩個更基礎嘅 pattern（用家指定嘅 long/short 組合）：
+
+| id | 名 | 拍點 | pattern |
+|---|---|---|---|
+| `basic-a` | 基本節奏 A | 1, 2&, 3, 4 | LONG short LONG LONG |
+| `basic-b` | 基本節奏 B | 1, 2, 3&, 4 | LONG LONG short LONG |
+
+（決策：`short` 一律解讀成「嗰一拍嘅後半拍」（`&`），即該拍唔打正拍、打後半拍。如果原意係「短音打喺拍頭」，改 `pattern` 一行就可以。）
+
+測試 `test-counts.mjs`（真 Chrome）：4/4 = 8 格、標籤 `1&2&3&4&`、LONG/short 逐格交替；華爾茲 = 6 格；bossa 全部 `even`；示範排到 **12 盞燈（2 bars × 6，冇多一粒數拍）**；兩個 bar 後燈燒完、queue／scheduler／oscillator 歸零；基本節奏 A/B 嘅亮格分別係 `0,3,4,6` 同 `0,2,5,6`；0 JS error。390px 闊亦做過目視檢查（媒體查詢收細字級，冇橫向溢出）。
 
 ## 9. 點跑
 

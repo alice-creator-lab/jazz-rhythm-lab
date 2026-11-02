@@ -58,8 +58,15 @@ await send("Emulation.setDeviceMetricsOverride", { width: 900, height: 1200, dev
 await send("Page.navigate", { url: URL });
 await sleep(1500);
 
-// 揀 chip → 示範一個 bar
-await evalJs(`[...document.querySelectorAll('.feel')].find(b => b.textContent.includes('中速 Swing')).click()`);
+// 揀「基本節奏 A」→ 計數格顯示 1、2&、3、4
+await evalJs(`[...document.querySelectorAll('.feel')].find(b => b.textContent.includes('基本節奏 A')).click()`);
+await sleep(120);
+const shotAll = async (name) => {
+  const r = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true });
+  writeFileSync(`${OUT}/${name}.png`, Buffer.from(r.result.data, "base64"));
+  console.log("saved", `${OUT}/${name}.png`);
+};
+await shotAll("05-basic-a");
 
 // 等到有一格亮住先影
 let ok = false;

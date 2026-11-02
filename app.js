@@ -161,16 +161,14 @@ function clearLights() {
   if ($("counts")) for (const c of $("counts").children) c.classList.remove("lit");
 }
 
-/** 揀 feel 之後試聽一個 bar（未開始練習前） */
+/** 揀 feel 之後試聽兩個 bar（未開始練習前；唔加數拍，直接由第一拍開始） */
 function previewFeel(feel) {
   if (S.running) return;
   const c = ensureCtx();
   c.resume();
   stopAudio();
-  const grid = buildGrid(feel, S.bpm, { barsOverride: 1 });
+  const grid = buildGrid(feel, S.bpm, { barsOverride: 2 });
   const t0 = audioNowMs() + 450;
-  // 前面加一下「數拍」，等你知道邊度係一
-  S.queue.push({ atSec: (t0 - grid.beatMs) / 1000, accent: true, vol: 0.55 });
   for (const tg of grid.targets) {
     S.queue.push({
       atSec: (t0 + tg.t) / 1000,
@@ -181,14 +179,11 @@ function previewFeel(feel) {
   S.queue.sort((a, b) => a.atSec - b.atSec);
   S.sched = setInterval(pumpQueue, 25);
   pumpQueue();
-  // 亮燈同一個 bar
-  scheduleLights([
-    { t: t0 - grid.beatMs, slot: 0 },
-    ...grid.targets.map((tg) => ({ t: t0 + tg.t, slot: tg.beat * 2 + (tg.kind === "off" ? 1 : 0) })),
-  ]);
-  // 一個 bar 之後自動收工
+  // 亮燈同樣兩個 bar
+  scheduleLights(grid.targets.map((tg) => ({ t: t0 + tg.t, slot: tg.beat * 2 + (tg.kind === "off" ? 1 : 0) })));
+  // 兩個 bar 之後自動收工
   clearTimeout(S.previewEnd);
-  S.previewEnd = setTimeout(() => { if (!S.running) stopAudio(); }, grid.barMs + 450);
+  S.previewEnd = setTimeout(() => { if (!S.running) stopAudio(); }, grid.barMs * 2 + 450);
 }
 
 // ---------------------------------------------------------------------------

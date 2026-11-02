@@ -76,9 +76,13 @@ const previewStart = await evalJs(`(() => { __spike.preview('swing-med'); return
 check(previewStart.queue > 0 || previewStart.oscillators > 0, `preview 應該即刻排/響，實際 ${JSON.stringify(previewStart)}`);
 check(previewStart.schedActive, "preview 應該開 scheduler");
 
-// 120bpm 4/4 = 2s 一個 bar，+450ms lead → 3.5s 後應該完全停
-await sleep(3600);
-const previewEnd = await evalJs(`__spike.audio()`);
+// 120bpm 4/4 = 2s 一個 bar；示範而家係 2 bars +450ms lead → 等到自動收工
+let previewEnd = null;
+for (let i = 0; i < 140; i++) {
+  previewEnd = await evalJs(`__spike.audio()`);
+  if (!previewEnd.schedActive && previewEnd.queue === 0 && previewEnd.oscillators === 0) break;
+  await sleep(60);
+}
 check(previewEnd.queue === 0, `preview 完後 queue 應該清空，實際 ${previewEnd.queue}`);
 check(previewEnd.oscillators === 0, `preview 完後唔應該有 oscillator，實際 ${previewEnd.oscillators}`);
 check(!previewEnd.schedActive, "preview 完後 scheduler 應該停");
