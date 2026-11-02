@@ -102,7 +102,7 @@
   .fb li{font-size:13px;color:#c9d6e6;padding:6px 0;border-top:1px solid #1b2430;line-height:1.5}
   .fb li:before{content:"·";color:var(--accent);margin-right:8px;font-weight:700}
   .hist{display:flex;align-items:flex-end;gap:5px;height:52px;margin-top:10px}
-  .hist div{flex:1;min-width:6px;background:#26313f;border-radius:3px 3px 0 0}
+  .hist div{flex:1;max-width:46px;min-width:6px;background:#26313f;border-radius:3px 3px 0 0}
   .hist div.hi{background:var(--accent)}
   .badge{font-size:11px;padding:3px 8px;border-radius:20px;border:1px solid var(--line);color:var(--muted);display:inline-block;margin-left:8px;vertical-align:1px}
   .badge.live{border-color:var(--accent2);color:var(--accent2)}
@@ -192,6 +192,7 @@
       <div class="stat"><span>swing</span><b id="sRatio">—</b></div>
     </div>
     <div class="tap-pad" id="tapPad">喺呢度 / 鍵盤 / MIDI 打拍子</div>
+    <div class="hint" id="alignWarn"></div>
     <div class="row"><button class="btn" id="stopBtn">停</button></div>
   </section>
 
@@ -208,6 +209,11 @@
       <div class="kv"><span>實測 swing（目標）</span><b id="rRatio">—</b></div>
       <div class="kv"><span>命中 / 漏 / 多</span><b id="rCounts">—</b></div>
       <div class="kv"><span>容差窗口</span><b id="rTol">—</b></div>
+      <div class="kv"><span>偵測到嘅系統偏移</span><b id="rAlign">—</b></div>
+    </div>
+    <div class="row" id="alignRow" style="display:none">
+      <button class="btn" id="applyAlign">用呢個偏移做校準</button>
+      <span class="hint" id="alignNote"></span>
     </div>
     <ul class="fb" id="rFb"></ul>
     <div class="row" style="margin-top:16px"><button class="btn primary" id="againBtn">再嚟一次</button><button class="btn" id="backBtn">改設定</button></div>
@@ -215,6 +221,7 @@
   </section>
 
   <p class="hint" style="margin-top:22px;text-align:center">spike prototype · 量度數據同可行性結論見 repo README</p>
+  <p class="hint" id="clockInfo" style="text-align:center;opacity:.75"></p>
 </div>
 <script type="module" src="./app.js"></script>
 </body>

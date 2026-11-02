@@ -13,6 +13,7 @@ const OUT = `${homedir()}/.hermes/profiles/friend/workspace/jazz-rhythm-spike/sh
 mkdirSync(OUT, { recursive: true });
 const W = Number(process.env.W || 900);
 const SUFFIX = process.env.SUFFIX || "";
+const BIAS = Number(process.env.BIAS || 0);
 
 const child = spawn(CHROME, [
   "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
@@ -79,7 +80,7 @@ await evalJs(`(async () => {
   let x = 7; const rnd = () => ((x = (x*48271)%2147483647)/2147483647);
   const gauss = (mu, sg) => mu + sg*Math.sqrt(-2*Math.log(Math.max(1e-9,rnd())))*Math.cos(2*Math.PI*rnd());
   const nowMs = performance.now();
-  for (let i = 0; i < Math.min(6, tg.length); i++) __spike.tapAtAudio(tg[i] + gauss(2, 9));
+  for (let i = 0; i < Math.min(6, tg.length); i++) __spike.tapAtAudio(tg[i] + ${BIAS} + gauss(2, 9));
   await wait(60);
   return 'ok';
 })()`);
@@ -93,7 +94,7 @@ await evalJs(`(async () => {
   const gauss = (mu, sg) => mu + sg*Math.sqrt(-2*Math.log(Math.max(1e-9,rnd())))*Math.cos(2*Math.PI*rnd());
   const s = __spike.state.session;
   const already = s.taps.length;
-  for (let i = already; i < tg.length; i++) __spike.tapAtAudio(tg[i] + gauss(-9, 10));
+  for (let i = already; i < tg.length; i++) __spike.tapAtAudio(tg[i] + ${BIAS} + gauss(-9, 10));
   await wait(80);
   __spike.finish();
   await wait(150);

@@ -158,10 +158,71 @@ export function hitScore(errMs, tolMs) {
  * @param {number} o.beatMs
  * @param {number} [o.targetOffsetMs] 容許／要求嘅整體偏移（>0 = 推前，<0 = 拉後）
  */
-export function scoreSession({ taps, targets, tolMs, beatMs, targetOffsetMs = 0 }) {
+/** 數某個偏移之下，有幾多下落入 tol×1.5 之內（用嚟揀最佳對齊） */
+function countGood(shiftedTargets, taps, tolMs, winMs) {
+  const { hits } = matchTaps(shiftedTargets, taps, winMs);
+  let n = 0, sum = 0;
+  for (const h of hits) {
+    if (h.err !== null && Math.abs(h.err) <= tolMs * 1.5) { n++; sum += Math.abs(h.err); }
+  }
+  return { n, sum };
+}
+
+/**
+ * 估系統性偏移（藍牙耳機、未校準嘅裝置延遲）。
+ * 逐個候選偏移試，睇邊個令最多下落入容差；同分就揀最細嘅偏移（避免鎖死喺半個 subdivision）。
+ * 只喺偏移 ≥ 50ms 而且唔係「散」嘅時候才接納。
+ */
+export function estimateAlign(shiftedTargets, taps, tolMs, beatMs) {
+  if (taps.length < 4) return 0;
+  const winMs = Math.max(70, Math.min(tolMs * 2.5, 200));
+  const scoreAt = (s) => {
+    const r = countGood(shiftedTargets, taps.map((t) => t - s), tolMs, winMs);
+    return { s, n: r.n, avg: r.n ? r.sum / r.n : 1e9 };
+  };
+  let best = scoreAt(0);
+  for (let s = -300; s <= 300; s += 5) {
+    if (s === 0) continue;
+    const c = scoreAt(s);
+    const better =
+      c.n > best.n ||
+      (c.n === best.n && c.n > 0 && (
+        c.avg < best.avg - 1 ||
+        (Math.abs(c.avg - best.avg) <= 1 && Math.abs(c.s) < Math.abs(best.s))
+      ));
+    if (better) best = c;
+  }
+  if (Math.abs(best.s) < 50 || best.n < 3) return 0;
+  const errs = taps.map((t) => t - best.s)
+    .map((t) => {
+      let bd = Infinity, bdErr = null;
+      for (const tg of shiftedTargets) {
+        const d = t - tg.t;
+        if (Math.abs(d) < bd) { bd = Math.abs(d); bdErr = d; }
+      }
+      return bd <= Math.min(beatMs * 0.5, 260) ? bdErr : null;
+    })
+    .filter((v) => v !== null);
+  const s = sd(errs);
+  if (s !== null && s > 70) return 0; // 散 → 唔係系統延遲，係技術問題
+  return best.s;
+}
+
+export function scoreSession({ taps, targets, tolMs, beatMs, targetOffsetMs = 0, autoAlignMs = 50 }) {
   const shifted = targets.map((t) => ({ ...t, t: t.t + targetOffsetMs }));
+  const raw = [...taps].sort((a, b) => a - b);
+
+  // 自動對齊：整體偏移又大又穩（多數係藍牙耳機／裝置延遲、未校準）就先對齊再評分。
+  // 唔對齊嘅話，180ms 延遲會變晒「漏拍 + 多拍」，用戶會覺得明明打啱都 0 分。
+  let alignMs = 0;
+  if (autoAlignMs) {
+    const est = estimateAlign(shifted, raw, tolMs, beatMs);
+    if (Math.abs(est) >= autoAlignMs) alignMs = +est.toFixed(1);
+  }
+  const alignedTaps = raw.map((t) => t - alignMs);
+
   const winMs = tolMs * 2.5;
-  const { hits, extras } = matchTaps(shifted, [...taps].sort((a, b) => a - b), winMs);
+  const { hits, extras } = matchTaps(shifted, alignedTaps, winMs);
   const scored = hits.map((h) => ({
     ...h,
     score: h.err === null ? 0 : hitScore(h.err, tolMs),
@@ -183,6 +244,7 @@ export function scoreSession({ taps, targets, tolMs, beatMs, targetOffsetMs = 0 
 
   return {
     tolMs,
+    alignMs,
     nTargets: scored.length,
     nHits: errs.length,
     nMissed: scored.length - errs.length,

@@ -38,6 +38,8 @@ function ensureCtx() {
   return S.ctx;
 }
 
+let clockPath = "ots";
+
 /**
  * performance.now() 時間 → audio 時鐘時間（ms）。
  * 用 getOutputTimestamp，因為 currentTime 係「正在 render」而唔係「正在聽到」，
@@ -47,9 +49,16 @@ function perfToAudioMs(perfMs) {
   const c = ensureCtx();
   const ts = c.getOutputTimestamp ? c.getOutputTimestamp() : null;
   if (ts && ts.performanceTime > 0) {
-    return (ts.contextTime + (perfMs - ts.performanceTime) / 1000) * 1000;
+    const mapped = (ts.contextTime + (perfMs - ts.performanceTime) / 1000) * 1000;
+    // Safari 有時會回 0 或者亂值；偏離 currentTime 太遠就當唔可信，改用 fallback
+    if (Math.abs(mapped - c.currentTime * 1000) < 1000) {
+      clockPath = "ots";
+      return mapped;
+    }
+    clockPath = "ots-bad";
   }
   const outLat = c.outputLatency || c.baseLatency || 0;
+  clockPath = "fallback";
   return (c.currentTime - outLat) * 1000;
 }
 
@@ -236,7 +245,7 @@ function startSession({ testMode = false } = {}) {
   S.session = {
     feel, bpm: S.bpm, bars: S.bars, targetOffset: S.targetOffset,
     beatMs: grid.beatMs, barMs: grid.barMs, tolMs: grid.tolMs,
-    t0, targets, taps: [], aux: [], testMode,
+    t0, targets, taps: [], aux: [], testMode, alignMs: 0, lastTap: -Infinity,
     endMs: targets.at(-1).t + grid.barMs * 0.6,
   };
 
@@ -263,6 +272,7 @@ function startSession({ testMode = false } = {}) {
   $("result").classList.add("hidden");
   $("stage").classList.remove("hidden");
   $("stageBadge").textContent = "count-in";
+  $("alignWarn").textContent = "";
   S.running = true;
   loop();
 }
@@ -361,17 +371,20 @@ function nearestTarget(t) {
 function paintHit(t) {
   const s = S.session;
   const { target, err } = nearestTarget(t);
-  if (!target || Math.abs(err) > s.tolMs * 2.5) return;
+  if (!target) return;
+  // 用「扣咗系統偏移」嘅誤差去上色，同評分一致
+  const e = err - (s.alignMs || 0);
   const el = S.dots.get(target);
   if (!el) return;
   el.classList.remove("hit-good", "hit-ok", "hit-bad");
-  const cls = Math.abs(err) <= s.tolMs * 0.5 ? "hit-good" : Math.abs(err) <= s.tolMs ? "hit-ok" : "hit-bad";
-  el.classList.add(cls);
+  const cls = Math.abs(e) <= s.tolMs * 0.5 ? "hit-good" : Math.abs(e) <= s.tolMs ? "hit-ok" : "hit-bad";
+  el.classList.add(cls); // 就算差好遠都照樣上色，唔會「靜英英冇反應」
 
   const lane = $("lane");
   const f = document.createElement("div");
   f.className = "float";
-  f.textContent = (err > 0 ? "+" : "") + Math.round(err);
+  f.textContent = (e > 0 ? "+" : "") + Math.round(e);
+  f.style.color = cls === "hit-good" ? "var(--good)" : cls === "hit-ok" ? "var(--accent)" : "var(--bad)";
   f.style.left = el.style.left;
   f.style.top = (target.kind === "off" ? 68 : 40) + "px";
   lane.appendChild(f);
@@ -385,12 +398,16 @@ function updateLive() {
   const r = scoreSession({
     taps: s.taps, targets: s.targets, tolMs: s.tolMs, beatMs: s.beatMs, targetOffsetMs: s.targetOffset,
   });
+  s.alignMs = r.alignMs;
   const last = r.scored.filter((x) => x.err !== null).at(-1);
   $("sLast").textContent = last ? `${last.err > 0 ? "+" : ""}${Math.round(last.err)} ms` : "—";
   $("sLast").style.color = last && Math.abs(last.err) <= s.tolMs ? "var(--good)" : "var(--bad)";
   $("sPocket").textContent = r.pocketMs === null ? "—" : `${r.pocketMs > 0 ? "+" : ""}${r.pocketMs}`;
   $("sSigma").textContent = r.sigmaMs === null ? "—" : `${r.sigmaMs}`;
   $("sRatio").textContent = r.swingRatio === null ? "—" : `1 : ${r.swingRatio}`;
+  $("alignWarn").innerHTML = r.alignMs
+    ? `已自動對齊 <b>${r.alignMs > 0 ? "遲" : "早"} ${Math.abs(r.alignMs)} ms</b>（多數係耳機／裝置延遲）— 建議撳「校準」`
+    : "";
 }
 
 function flashPad(source) {
@@ -425,7 +442,26 @@ function finish() {
   $("rRatio").textContent = r.swingRatio === null ? "—" : `1 : ${r.swingRatio}（目標 1:${targetRatio.toFixed(1)}）`;
   $("rCounts").textContent = `${r.nHits} / ${r.nMissed} / ${r.nExtras}`;
   $("rTol").textContent = `±${r.tolMs.toFixed(0)} ms`;
+  $("rAlign").textContent = r.alignMs
+    ? `${r.alignMs > 0 ? "遲" : "早"} ${Math.abs(r.alignMs)} ms（已對齊）`
+    : "冇（打得準）";
+  if (r.alignMs) {
+    $("alignRow").style.display = "flex";
+    $("alignNote").innerHTML = `偵測到你整體${r.alignMs > 0 ? "遲" : "早"}咗 ${Math.abs(r.alignMs)} ms，已自動對齊先評分。如果係耳機／裝置延遲，做一次校準就唔使每次靠自動對齊。`;
+    $("applyAlign").onclick = () => {
+      S.calibMs = +(S.calibMs + r.alignMs).toFixed(1);
+      S.calibrated = true;
+      $("calibTxt").innerHTML = `校準更新：<b>${S.calibMs > 0 ? "+" : ""}${S.calibMs} ms</b>（由系統偏移推算）`;
+      $("alignRow").style.display = "none";
+    };
+  } else {
+    $("alignRow").style.display = "none";
+  }
   $("rFb").innerHTML = feedback(r).map((x) => `<li>${x}</li>`).join("");
+
+  const c = ensureCtx();
+  $("clockInfo").textContent =
+    `時鐘 ${clockPath} · 輸出延遲 ${Math.round((c.outputLatency || 0) * 1000)}ms · 緩衝 ${Math.round((c.baseLatency || 0) * 1000)}ms · ${c.sampleRate}Hz · 校準 ${S.calibMs}ms`;
 
   S.hist.push({ t: Date.now(), feel: s.feel.id, bpm: s.bpm, total: r.total, grade: r.grade, pocket: r.pocketMs, sigma: r.sigmaMs, ratio: r.swingRatio });
   S.hist = S.hist.slice(-12);
@@ -555,6 +591,16 @@ window.__spike = {
     feel: c.querySelector("span").textContent,
     muted: c.classList.contains("muted"),
   })),
+  clock: () => {
+    const c = ensureCtx();
+    return {
+      path: clockPath,
+      outputLatency: c.outputLatency ?? null,
+      baseLatency: c.baseLatency ?? null,
+      sampleRate: c.sampleRate,
+      calibMs: S.calibMs,
+    };
+  },
 };
 
 // boot

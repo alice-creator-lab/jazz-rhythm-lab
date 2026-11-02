@@ -82,7 +82,7 @@ const script = ({ sigma, bias, feelId, bpm, bars, seed, targetOffset = 0 }) => `
   __spike.finish();
   const r = __spike.result();
   return { n: tg.length, total: r.total, grade: r.grade, pocket: r.pocketMs, sigma: r.sigmaMs,
-           ratio: r.swingRatio, hits: r.nHits, missed: r.nMissed, extras: r.nExtras, tol: +r.tolMs.toFixed(1) };
+           ratio: r.swingRatio, hits: r.nHits, missed: r.nMissed, extras: r.nExtras, tol: +r.tolMs.toFixed(1), align: r.alignMs };
 })()`;
 
 const tight = await evalJs(script({ sigma: 8, bias: 0, feelId: "swing-med", bpm: 120, bars: 4, seed: 11 }));
@@ -92,8 +92,10 @@ const straight = await evalJs(script({ sigma: 8, bias: 0, feelId: "bossa", bpm: 
 const waltz = await evalJs(script({ sigma: 10, bias: 0, feelId: "waltz", bpm: 140, bars: 4, seed: 55 }));
 // 同一個「拉後 25ms」嘅演奏，但目標偏移設成 -25ms：應該由 C 變返高分
 const offsetMatch = await evalJs(script({ sigma: 8, bias: -25, feelId: "swing-med", bpm: 120, bars: 4, seed: 66, targetOffset: -25 }));
+// 藍牙耳機／未校準：整體遲 180ms，應該自動對齊，而唔係變成「全部漏拍 + 0 分」
+const bluetooth = await evalJs(script({ sigma: 10, bias: 180, feelId: "swing-med", bpm: 120, bars: 4, seed: 77 }));
 
-const out = { boot, tight, loose, laidback, straight, waltz, offsetMatch, pageErrors };
+const out = { boot, tight, loose, laidback, straight, waltz, offsetMatch, bluetooth, pageErrors };
 console.log(JSON.stringify(out, null, 2));
 
 // ---- assertions ----
@@ -110,6 +112,9 @@ if (!(tight.total > loose.total + 15)) fails.push(`tight (${tight.total}) should
 if (tight.missed !== 0 || tight.extras !== 0) fails.push(`tight should have no misses/extras, got ${tight.missed}/${tight.extras}`);
 if (tight.hits !== tight.n) fails.push(`tight hits ${tight.hits} != targets ${tight.n}`);
 if (!(offsetMatch.total > 85)) fails.push(`offset-matched laid-back playing should score >85, got ${offsetMatch.total}`);
+if (!(Math.abs(bluetooth.align - 180) <= 20)) fails.push(`180ms latency should be detected as ~180, got ${bluetooth.align}`);
+if (!(bluetooth.total > 80)) fails.push(`180ms latency should still score >80 after auto-align, got ${bluetooth.total}`);
+if (bluetooth.missed !== 0) fails.push(`180ms latency should not count as missed hits, got ${bluetooth.missed}`);
 if (pageErrors.length) fails.push(`page errors: ${pageErrors.join(" | ")}`);
 
 console.log(fails.length ? "\nFAIL\n- " + fails.join("\n- ") : "\nPASS — 所有斷言通過");
