@@ -55,7 +55,10 @@ function perfToAudioMs(perfMs) {
 
 const audioNowMs = () => perfToAudioMs(performance.now());
 
-function click(atSec, accent) {
+// 所有仍然存在嘅發聲源；停嘅時候要即刻收聲（iOS 上尤其緊要）
+const activeOsc = new Set();
+
+function click(atSec, accent, vol = 1) {
   const c = ensureCtx();
   if (!Number.isFinite(atSec) || atSec < 0) return;
   const when = Math.max(atSec, c.currentTime + 0.001); // 唔好排去過去
@@ -66,11 +69,26 @@ function click(atSec, accent) {
   o2.type = "sine"; o2.frequency.value = accent ? 2300 : 1660;
   o1.connect(g); o2.connect(g);
   g.gain.setValueAtTime(0.0001, when);
-  g.gain.linearRampToValueAtTime(accent ? 0.85 : 0.5, when + 0.002);
+  g.gain.linearRampToValueAtTime((accent ? 0.85 : 0.5) * vol, when + 0.002);
   g.gain.exponentialRampToValueAtTime(0.0006, when + 0.085);
   o1.start(when); o2.start(when);
   o1.stop(when + 0.12); o2.stop(when + 0.12);
-  o1.onended = () => { try { g.disconnect(); } catch {} };
+  activeOsc.add(o1); activeOsc.add(o2);
+  o1.onended = () => {
+    activeOsc.delete(o1); activeOsc.delete(o2);
+    try { g.disconnect(); } catch {}
+  };
+}
+
+/** 即刻收聲：清 queue、停所有已排程嘅 oscillator、停 scheduler。 */
+function stopAudio() {
+  S.queue.length = 0;
+  if (S.sched) { clearInterval(S.sched); S.sched = null; }
+  for (const o of activeOsc) {
+    try { o.onended = null; o.stop(0); } catch {}
+    try { o.disconnect(); } catch {}
+  }
+  activeOsc.clear();
 }
 
 function pumpQueue() {
@@ -79,8 +97,33 @@ function pumpQueue() {
   // lookahead 150ms：就算 main thread 卡一下都唔會甩拍
   while (S.queue.length && S.queue[0].atSec < now + 0.15) {
     const ev = S.queue.shift();
-    click(ev.atSec, ev.accent);
+    click(ev.atSec, ev.accent, ev.vol ?? 1);
   }
+}
+
+/** 揀 feel 之後試聽一個 bar（未開始練習前） */
+function previewFeel(feel) {
+  if (S.running) return;
+  const c = ensureCtx();
+  c.resume();
+  stopAudio();
+  const grid = buildGrid(feel, S.bpm, { barsOverride: 1 });
+  const t0 = audioNowMs() + 450;
+  // 前面加一下「數拍」，等你知道邊度係一
+  S.queue.push({ atSec: (t0 - grid.beatMs) / 1000, accent: true, vol: 0.55 });
+  for (const tg of grid.targets) {
+    S.queue.push({
+      atSec: (t0 + tg.t) / 1000,
+      accent: tg.kind === "on" && tg.beat === 0,
+      vol: tg.kind === "off" ? 0.62 : 1,
+    });
+  }
+  S.queue.sort((a, b) => a.atSec - b.atSec);
+  S.sched = setInterval(pumpQueue, 25);
+  pumpQueue();
+  // 一個 bar 之後自動收工
+  clearTimeout(S.previewEnd);
+  S.previewEnd = setTimeout(() => { if (!S.running) stopAudio(); }, grid.barMs + 450);
 }
 
 // ---------------------------------------------------------------------------
@@ -294,8 +337,10 @@ function flashPad(source) {
 // 結束 + 結果
 // ---------------------------------------------------------------------------
 function finish() {
+  if (!S.session) return;
   S.running = false;
   cancelAnimationFrame(S.raf);
+  stopAudio(); // 即刻收聲：唔好留返已經排咗嘅 click 繼續響
   const s = S.session;
   const r = scoreSession({
     taps: s.taps, targets: s.targets, tolMs: s.tolMs, beatMs: s.beatMs, targetOffsetMs: s.targetOffset,
@@ -354,6 +399,7 @@ function renderFeels() {
       $("bpmVal").textContent = `${f.bpm} bpm`;
       renderFeels();
       renderHint();
+      previewFeel(f); // 揀完即聽一個 bar
     };
     el.appendChild(b);
   }
@@ -423,6 +469,15 @@ window.__spike = {
   finish: () => finish(),
   result: () => window.__lastResult,
   setCalib: (v) => { S.calibMs = v; S.calibrated = true; },
+  // 音訊狀態（測試用）
+  audio: () => ({
+    queue: S.queue.length,
+    schedActive: !!S.sched,
+    oscillators: activeOsc.size,
+    running: S.running,
+  }),
+  preview: (feelId) => previewFeel(feelById(feelId || S.feelId)),
+  stopAudio: () => stopAudio(),
 };
 
 // boot

@@ -118,13 +118,28 @@ Headless 驗證（`node spikes/003-prototype/test-headless.mjs`，真 Chrome）�
 
 **未做／唔喺呢個 spike 範圍**：真機延遲量測、iOS 測試、用戶帳戶／雲端同步、多聲部（左手 comping + 右手旋律同時評分）。
 
-## 7. 點跑
+## 7. 實機回饋修正（iOS Safari）
+
+實際用家喺 Safari 試玩後報咗三個問題，已修並加測試（`spikes/003-prototype/test-audio-stop.mjs`）：
+
+1. **tap 變 double-tap 放大** → 打拍子區 `touch-action: none`、其餘 `manipulation`，加 `user-select: none`／`-webkit-touch-callout: none`。
+   教訓：iOS Safari 嘅 double-tap zoom 唔受 `preventDefault()` 控制，只受 CSS `touch-action` 控制。
+2. **停咗仲有聲** → 原本 `finish()` 只 cancel 畫面 loop，已經排入 audio graph 嘅 click 同 `setInterval` scheduler 照跑。
+   修法：keep 一組 live `OscillatorNode`，停嘅時候清 queue、`clearInterval`、逐個 `stop(0)` + `disconnect()`。
+   教訓：Web Audio 嘅 event 一排咗就收唔返，一定要自己保存 handle 才停得到。
+3. **揀 feel 後想聽示範** → 揀 chip 即播一個 bar（前面加一下數拍，後半拍細聲啲），一個 bar 後自動收工；再揀另一個 chip 會先停上一個。
+
+驗證：`test-audio-stop.mjs` 量到 `touch-action` 係 `none`／`manipulation`、preview 一個 bar 後 queue／scheduler／oscillator 全部歸零、練習中途停同樣即刻歸零、停後 1.2 秒仍然零、0 個 JS error。
+
+## 8. 點跑
+
 
 ```bash
 cd jazz-rhythm-spike
 python3 -m http.server 8799        # 開 http://127.0.0.1:8799/
 node spikes/002-scoring/sim.mjs    # 評分模型模擬（唔需要瀏覽器）
 node spikes/003-prototype/test-headless.mjs   # 真 Chrome 端到端斷言（需要上面個 server）
+node spikes/003-prototype/test-audio-stop.mjs # touch-action / 停聲 / 一個 bar 示範
 node spikes/003-prototype/shots.mjs           # 影截圖去 shots/
 ```
 

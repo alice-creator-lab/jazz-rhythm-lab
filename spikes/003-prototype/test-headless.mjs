@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 
 const CHROME = `${homedir()}/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome`;
 const PORT = Number(process.env.CDP_PORT || 9313);
-const URL = "http://127.0.0.1:8799/index.html";
+const URL = process.env.TEST_URL || "http://127.0.0.1:8799/index.html";
 
 const child = spawn(CHROME, [
   "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
