@@ -1,0 +1,131 @@
+# Jazz 拍子實驗室 — 可行性研究（spike）
+
+**問題**：jazz 嘅「拍子」同 classical 唔同 — 唔係對死一個 grid，而係**後半拍擺喺邊**（swing ratio）、**每一下穩唔穩**（σ）、同**整體拉後幾多**（pocket / laid-back）。
+**問**：可唔可以喺瀏覽器做一個練習 app，逐下量到呢三樣嘢並評分？
+**答**：**可以**。已經有一個跑得嘅 prototype，同三組實測數據支持。
+
+| # | Spike | 驗證咗咩 | 結論 |
+|---|---|---|---|
+| 001 | 音訊時鐘精度 | 排程誤差、時鐘量化、輸入時間戳噪聲 | **PARTIAL**：排程 sample-exact（±0.025ms）、scheduler 唔會甩拍；但 `getOutputTimestamp` 喺 headless 唔可信，真機輸入延遲要另測 |
+| 002 | 評分／swing ratio 估算 | 合成 tap 下估得到 swing 比例、分得出 1.5 / 2.0 / 2.5 | **VALIDATED**（σ≤20ms 無偏差；4 小節 96% 分辨率）|
+| 003 | 可操作 prototype | 真 Chrome 開 app、跑 session、計分、出報告 | **VALIDATED**（headless 斷言全過，見 `spikes/003-prototype/test-headless.mjs`）|
+
+---
+
+## 1. 為什麼 jazz 要用另一套評分
+
+古典練習 app 通常咁評分：tap 對唔對到格 → 誤差 < X ms 就滿分。呢個對 jazz 有三個問題：
+
+1. **後半拍唔喺 50%**。Swing 8 分係長─短，medium tempo 大約 1.5:1–2.2:1（即後半拍落在每拍 60%–69% 位置）。用「平均格」去評分會把正確嘅 swing 當成錯。
+2. **一致嘅「拉後」係風格，唔係錯**。研究量到職業爵士鋼琴家嘅 downbeat 平均遲 30ms 左右（≈150bpm 時四分音符嘅 9%，見 Nelias et al. 2022, *Commun Phys* 5:237）。全部一致地拉後 = 有 pocket；忽前忽後 = 唔穩。所以「平均偏差」同「標準差」要分開報。
+3. **後半拍本身有獨立嘅穩定度**。Swing feel 死喺後半拍，唔係正拍。所以 σ 要分開計 on-beat / off-beat。
+
+呢個 app 就係照呢三點設計：`pocket`（平均偏差，負 = 拉後）、`σ`（穩定度）、`swing ratio`（實測 vs 目標）。
+
+## 2. 實測數據（spike 001：瀏覽器時鐘夠唔夠準？）
+
+喺 headless Chrome 149（Linux，44.1kHz null sink）跑 `spikes/001-audio-clock/measure.mjs`：
+
+| 項目 | 實測 | 意義 |
+|---|---|---|
+| 排程落 sample 嘅誤差 | −0.025 ~ +0.025 ms | `OscillatorNode.start(t)` 係 sample-exact（1 sample = 0.0227ms），音本身冇抖 |
+| `AudioContext.currentTime` 粒度 | 2.9025 ms（= 128 frames @44.1k），只會跳 2.9 / 5.8 / 8.7 ms | **唔可以**用 `currentTime` 直接做 tap 時間戳，量化誤差已經佔容差一成 |
+| `performance.now()` 解像度 | 0.1 ms | 夠用 |
+| 用 `getOutputTimestamp()` 映射 perf → audio | 噪聲 σ ≈ 3.2 ms（headless null sink） | 映射本身有幾 ms 抖，但遠細過人手抖動（σ 10–25ms） |
+| 排程 lookahead（25ms tick / 100ms 提前） | 60 個 event，最遲提前 69ms，**0 個排到過去** | 一般 CPU 抖動唔會甩拍 |
+| 音訊時鐘 vs 牆鐘漂移 | headless 下 295 ~ −682 ppm（唔可信，null sink 係合成時鐘）| 真機一般 20–200ppm；所以每次練習都要**重新錨定**，唔可以靠牆鐘累加 |
+| 鍵盤 `event.timeStamp` vs handler 內 `performance.now()` | 中位 0.5 ms（首下 22ms 係 warm-up） | 軟件路徑可忽略，真正延遲喺硬件／OS |
+
+**結論**：聲音可以做到 sample-exact；量度誤差嘅瓶頸唔係程式，而係**硬件輸入/輸出延遲**（鍵盤 5–30ms、觸控 50–100ms、USB MIDI 1–5ms、藍牙 MIDI 20–40ms）。所以校準係必需功能，唔係選項。
+
+## 3. 評分可唔可信？（spike 002：合成 tap 模擬）
+
+`spikes/002-scoring/sim.mjs`：用高斯抖動模擬人手，跑返同一套評分核心。
+
+**a) swing ratio 估得返上唔上**（中速 swing，目標 1:2.0，4 小節）
+
+| 人手抖動 σ | 估到嘅 ratio（中位數） | 20 次範圍 | 準確度分 |
+|---|---|---|---|
+| 4 ms | 2.00 | 1.92–2.06 | 100 |
+| 8 ms | 2.00 | 1.84–2.12 | 98.6 |
+| 12 ms | 2.00 | 1.77–2.19 | 95.2 |
+| 20 ms | 2.01 | 1.63–2.33 | 84.5 |
+| 30 ms | 2.00 | 1.50–2.32 | 69.9 |
+
+**無系統偏差**：σ 到 30ms 個中位數都仍然係 2.00，只係每個 session 嘅範圍變闊。
+
+**b) 分唔分得出 1.5 vs 2.0 vs 2.5**（σ = 12ms，即普通人嘅水平）
+
+| 練習小節數 | 1.5 → 估 | 2.0 → 估 | 2.5 → 估 | 分辨正確率 |
+|---|---|---|---|---|
+| 1 | 1.54 | 2.02 | 2.49 | 78% |
+| 2 | 1.52 | 1.98 | 2.54 | 91% |
+| 4 | 1.50 | 2.03 | 2.56 | **96%** |
+| 8 | 1.50 | 2.02 | 2.55 | **100%** |
+
+→ **產品規則：最少 4 小節才報 swing ratio，8 小節才報「穩定」。** 1 小節就報會誤導。
+
+**c) 分數有冇 discriminates**
+
+| 演奏 | 總分 | 等級 | 量到 pocket |
+|---|---|---|---|
+| σ 5ms，正中 | 97.1 | S | −1.1ms |
+| σ 10ms，正中 | 93.6 | S | −2.2ms |
+| σ 18ms，正中 | 85.2 | A | −4.0ms |
+| σ 28ms，正中 | 72.1 | C | −6.2ms |
+| σ 10ms，全部拉後 25ms | 74.0 | C | −27.2ms |
+| σ 10ms，全部推前 60ms | 37.1 | D | +56.1ms |
+
+同一個「拉後 25ms」嘅演奏，把「目標偏移」設成 −25ms 之後 → **92.9 分 S 級**（headless 實測）。即係話：**工具要分得開「有 pocket 嘅拉後」同「唔穩」**，而呢個係用家自己揀嘅目標。
+
+## 4. Prototype（spike 003）
+
+單頁 web app，`index.html` + `app.js` + `jazz-core.js`（純 logic，瀏覽器同 Node 共用）：
+
+- 7 個 feel：中速 swing（spang-a-lang）、快速 2-feel、ballad、jazz waltz、bossa、charleston comping、straight/funk
+- 輸入：鍵盤任何鍵 / 觸控 pad / **Web MIDI**（數碼鋼琴、電鋼；和弦自動 dedupe 35ms）
+- 校準：跟 8 下 click 打，計出「你嘅輸入比 click 遲幾多」並之後扣返
+- 即時：最後一下偏差、running pocket、σ、swing ratio；每粒音上色（綠/黃/紅）
+- 結果：等級 + pocket + σ（正拍／後半拍分開）+ 實測 swing vs 目標 + 漏拍/多拍 + 連續 12 次trend
+- 容差：`tol = clamp(0.16 × min(最短音符間隔, 一拍), 15ms, 45ms)`（60bpm ballad 45ms、120bpm swing 27ms、260bpm 15ms）
+
+Headless 驗證（`node spikes/003-prototype/test-headless.mjs`，真 Chrome）：
+
+| 情境 | 結果 |
+|---|---|
+| σ=8ms 正中 | 92.6 分 S，pocket +0.9，σ 8.5，ratio 2.06，0 漏 0 多 |
+| σ=28ms | 66.5 分 C，σ 23.3（分數明顯低過上面）|
+| σ=9ms 拉後 18ms | 85.6 分 A，pocket −16.8（準確量到）|
+| Bossa（平直） | 96.0 分 S，ratio 1.01（正確報「冇 swing」）|
+| Jazz waltz | ratio 2.19（12 下只有 4 個後半拍，樣本少，偏差合理）|
+| 拉後 25ms + 目標偏移 −25ms | 92.9 分 S |
+| JS errors | 0 |
+
+## 5. 限制／風險（老實講）
+
+1. **硬件延遲主導誤差**。藍牙耳機 + 藍牙 MIDI 可以疊加 60–120ms；校準可以吸收固定偏移，但吸收唔到抖動。App 應該偵測並提示「用有線耳機 / USB MIDI」。
+2. **`getOutputTimestamp` 嘅真機精度未驗**。呢次係 headless null sink（σ≈3ms、漂移數字不可信）。要真人 + 真音效卡再測一次，用 loopback（輸出 → 輸入）量實際 round-trip。
+3. **iOS Safari 冇 Web MIDI**（要用觸控，延遲大；iPhone 上只可以當「感覺練習」而唔係精準評分）。
+4. **速度越快容差越緊**：260bpm 時 tol 只剩 15ms，比一般手機觸控抖動仲細 → 高速練習只適合 MIDI。
+5. **「對唔對」同「好唔好聽」唔完全同一件事**。呢個 app 量到嘅係時值，量唔到 articulation、dynamic accent（hi-hat 2/4、ride 嘅輕重）。將來要加入力度（MIDI velocity 已經有）。
+6. **校準假設延遲穩定**。系統更新、換耳機、換瀏覽器 tab 都要重做。
+
+## 6. 如果正式做（建議次序）
+
+**Phase 1（1–2 日，已有 90%）**：把 prototype 變成可收藏嘅 PWA，加：練習紀錄（per-feel 最佳分）、分開 on/off beat 嘅 σ 趨勢、藍牙延遲警告、`getOutputTimestamp` 用唔到時嘅 fallback。
+**Phase 2**：用真機量 input latency（USB MIDI / 內建鍵盤 / 觸控，各 30 次），把量到嘅數字寫成「校準建議」；加埋 loopback 自我測試頁。
+**Phase 3**：加 lesson 結構（先 4 小節達標才加 bars／提速）、加力度評分、加「跟 backing track」（ii-V-I 或 12-bar blues 循環）而唔止 click。
+
+**未做／唔喺呢個 spike 範圍**：真機延遲量測、iOS 測試、用戶帳戶／雲端同步、多聲部（左手 comping + 右手旋律同時評分）。
+
+## 7. 點跑
+
+```bash
+cd jazz-rhythm-spike
+python3 -m http.server 8799        # 開 http://127.0.0.1:8799/
+node spikes/002-scoring/sim.mjs    # 評分模型模擬（唔需要瀏覽器）
+node spikes/003-prototype/test-headless.mjs   # 真 Chrome 端到端斷言（需要上面個 server）
+node spikes/003-prototype/shots.mjs           # 影截圖去 shots/
+```
+
+檔案：`jazz-core.js` 拍子網格／評分／swing ratio；`app.js` 音訊排程同 UI；`spikes/001-audio-clock/` 時鐘量測；`spikes/002-scoring/` 模擬；`spikes/003-prototype/` 端到端測試同截圖。

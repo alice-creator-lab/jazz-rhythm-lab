@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>audio clock probe</title></head>
+<body>
+<h1>audio clock probe</h1>
+<pre id="out">running…</pre>
+<script>
+window.ctx = null;
+window.probe = async function () {
+  const ctx = new AudioContext({ latencyHint: "interactive" });
+  window.ctx = ctx;
+  await ctx.resume();
+  const out = {
+    sampleRate: ctx.sampleRate,
+    baseLatency: ctx.baseLatency,
+    outputLatency: ctx.outputLatency ?? null,
+    renderQuantumMs: +(128 / ctx.sampleRate * 1000).toFixed(4),
+  };
+
+  // --- performance.now() resolution
+  const pnow = [];
+  for (let i = 0; i < 3000; i++) { const a = performance.now(), b = performance.now(); if (b > a) pnow.push(b - a); }
+  out.performanceNowMinDeltaMs = +Math.min(...pnow).toFixed(4);
+
+  // --- A) audio clock vs wall clock drift
+  const c0 = ctx.currentTime, t0 = performance.now();
+  const ots = [];
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    ots.push({
+      wallMs: performance.now() - t0,
+      audioMs: (ctx.currentTime - c0) * 1000,
+      ctxT: ctx.getOutputTimestamp().contextTime,
+      perfT: ctx.getOutputTimestamp().performanceTime,
+      now: performance.now(),
+      cnow: ctx.currentTime,
+    });
+  }
+  out.wallSpanMs = +ots.at(-1).wallMs.toFixed(1);
+  out.driftPpm = +(((ots.at(-1).audioMs - out.wallSpanMs) / out.wallSpanMs) * 1e6).toFixed(1);
+
+  // --- C) output timestamp: how far behind "now" is the audio the user hears?
+  const lat = ots.map((s) => (s.ctxT + (s.now - s.perfT) / 1000 - s.cnow) * 1000);
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const sd = (a) => Math.sqrt(mean(a.map((x) => (x - mean(a)) ** 2)));
+  out.otsRaw = ots.slice(0, 3).map((s) => ({ ctxT: +s.ctxT.toFixed(4), perfT: +s.perfT.toFixed(2), cnow: +s.cnow.toFixed(4) }));
+  out.otsPerfTimeNonZero = ots.every((s) => s.perfT > 0);
+  out.otsLatencyMs = +mean(lat).toFixed(2);
+  out.otsLatencySdMs = +sd(lat).toFixed(2);
+
+  // --- B) currentTime quantisation: poll until value changes, measure step sizes
+  const steps = [];
+  let prev = ctx.currentTime;
+  const tEnd = performance.now() + 250;
+  while (performance.now() < tEnd) {
+    const c = ctx.currentTime;
+    if (c !== prev) { steps.push(+((c - prev) * 1000).toFixed(4)); prev = c; }
+  }
+  const counts = {};
+  for (const s of steps) counts[s] = (counts[s] || 0) + 1;
+  out.audioClockStepMs = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4)
+    .map(([k, v]) => ({ stepMs: +k, n: v }));
+
+  // --- D) does a scheduled event land exactly on the intended sample?
+  const sr = ctx.sampleRate;
+  const offline = new OfflineAudioContext(1, sr * 2, sr);
+  const whens = [];
+  for (let k = 0; k < 8; k++) {
+    const t = 0.1 + k * 0.137;
+    whens.push(t);
+    const o = offline.createOscillator(), g = offline.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.8, t + 0.001);
+    g.gain.setValueAtTime(0.8, t + 0.004);
+    g.gain.linearRampToValueAtTime(0, t + 0.006);
+    o.frequency.value = 1000;
+    o.connect(g).connect(offline.destination);
+    o.start(t); o.stop(t + 0.01);
+  }
+  const data = (await offline.startRendering()).getChannelData(0);
+  const firstAt = (t) => {
+    const s = Math.max(0, Math.floor(t * sr) - 64), e = Math.min(data.length, Math.floor(t * sr) + 600);
+    for (let i = s; i < e; i++) if (Math.abs(data[i]) > 1e-4) return i / sr;
+    return null;
+  };
+  out.renderErrorsMs = whens.map((t) => { const f = firstAt(t); return f === null ? null : +((f - t) * 1000).toFixed(4); });
+
+  // --- E) lookahead scheduler lateness (25ms tick, 100ms lookahead, 3s)
+  const leads = [];
+  let next = ctx.currentTime + 0.1, n = 0;
+  const deadline = performance.now() + 3000;
+  await new Promise((done) => {
+    const iv = setInterval(() => {
+      const now = ctx.currentTime;
+      while (next < now + 0.1 && n < 400) { leads.push(+((next - now) * 1000).toFixed(2)); next += 0.05; n++; }
+      if (performance.now() > deadline) { clearInterval(iv); done(); }
+    }, 25);
+  });
+  out.scheduler = {
+    events: leads.length,
+    minLeadMs: Math.min(...leads),
+    maxLeadMs: Math.max(...leads),
+    scheduledInPast: leads.filter((l) => l < 0).length,
+  };
+  return out;
+};
+
+// --- F) input event timing: timestamps from real (CDP-injected) key events
+window.__inp = null;
+window.startInputTest = function () {
+  const rec = [];
+  window.__inp = rec;
+  const h = (e) => rec.push({ ts: e.timeStamp, now: performance.now(), type: e.type });
+  addEventListener("keydown", h, true);
+  addEventListener("pointerdown", (e) => rec.push({ ts: e.timeStamp, now: performance.now(), type: e.type }), true);
+  return "listening";
+};
+window.getInputResults = function () {
+  const rec = window.__inp || [];
+  const d = rec.map((r) => +(r.now - r.ts).toFixed(3));
+  const mean = d.reduce((a, b) => a + b, 0) / (d.length || 1);
+  const sd = Math.sqrt(d.reduce((a, b) => a + (b - mean) ** 2, 0) / (d.length || 1));
+  return { n: rec.length, timeStampMinusHandlerMs: { mean: +mean.toFixed(3), sd: +sd.toFixed(3), samples: d.slice(0, 8) } };
+};
+</script>
+</body>
+</html>

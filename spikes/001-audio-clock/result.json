@@ -1,0 +1,83 @@
+{
+  "input": {
+    "n": 12,
+    "timeStampMinusHandlerMs": {
+      "mean": 2.792,
+      "sd": 5.864,
+      "samples": [
+        21.9,
+        3.4,
+        0.4,
+        1.4,
+        0.4,
+        0.5,
+        0.4,
+        0.4
+      ]
+    }
+  },
+  "audio": {
+    "sampleRate": 44100,
+    "baseLatency": 0.01,
+    "outputLatency": 0,
+    "renderQuantumMs": 2.9025,
+    "performanceNowMinDeltaMs": 0.1,
+    "wallSpanMs": 6035.5,
+    "driftPpm": -682.1,
+    "otsRaw": [
+      {
+        "ctxT": 0.0801,
+        "perfT": 27464.2,
+        "cnow": 0.1219
+      },
+      {
+        "ctxT": 0.18,
+        "perfT": 27564.3,
+        "cnow": 0.2206
+      },
+      {
+        "ctxT": 0.2803,
+        "perfT": 27664.4,
+        "cnow": 0.3222
+      }
+    ],
+    "otsPerfTimeNonZero": true,
+    "otsLatencyMs": -35.52,
+    "otsLatencySdMs": 3.18,
+    "audioClockStepMs": [
+      {
+        "stepMs": 2.9025,
+        "n": 31
+      },
+      {
+        "stepMs": 5.805,
+        "n": 11
+      },
+      {
+        "stepMs": 8.7075,
+        "n": 6
+      },
+      {
+        "stepMs": 11.61,
+        "n": 2
+      }
+    ],
+    "renderErrorsMs": [
+      0.0227,
+      0.0068,
+      0.0136,
+      0.0204,
+      0.0045,
+      0.0113,
+      0.0181,
+      0.0249
+    ],
+    "scheduler": {
+      "events": 60,
+      "minLeadMs": 69.07,
+      "maxLeadMs": 99.95,
+      "scheduledInPast": 0
+    }
+  },
+  "harnessMs": 10600
+}

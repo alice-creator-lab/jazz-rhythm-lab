@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<title>Jazz 拍子實驗室 · swing feel 練習</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#18202b; --line:#232d3a;
+    --ink:#e8eef7; --muted:#8697ae; --accent:#f0b34a; --accent2:#5ee0b0;
+    --good:#5ee0b0; --warn:#f0b34a; --bad:#ff6b6b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg)}
+  body{
+    background:radial-gradient(1100px 520px at 50% -15%, #1c2532 0%, var(--bg) 62%);
+    color:var(--ink); min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:900px;margin:0 auto;padding:20px 16px 72px}
+  header h1{font-size:21px;margin:0 0 6px;letter-spacing:.5px}
+  header h1 span{color:var(--accent)}
+  header p{margin:0;color:var(--muted);font-size:13px;line-height:1.65}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:14px}
+  .card h2{font-size:12px;margin:0 0 12px;color:var(--muted);font-weight:600;letter-spacing:1.6px}
+  .hidden{display:none !important}
+
+  /* felt chips */
+  .feels{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px}
+  .feel{
+    background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 11px;
+    cursor:pointer;transition:.15s; text-align:left; color:var(--ink); font:inherit;
+  }
+  .feel:hover{border-color:#33404f}
+  .feel.on{border-color:var(--accent);background:#1d2431;box-shadow:0 0 0 1px var(--accent) inset}
+  .feel b{display:block;font-size:13.5px;font-weight:600}
+  .feel small{display:block;color:var(--muted);font-size:11px;margin-top:3px;line-height:1.4}
+
+  .row{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .row label{font-size:13px;color:var(--muted);min-width:64px}
+  input[type=range]{flex:1;accent-color:var(--accent);height:26px;min-width:140px}
+  .val{font-variant-numeric:tabular-nums;font-size:14px;min-width:74px;text-align:right}
+
+  .btn{
+    appearance:none;border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+    border-radius:11px;padding:11px 18px;font:inherit;font-size:14px;cursor:pointer;transition:.15s;
+  }
+  .btn:hover{border-color:#3a4a5e}
+  .btn.primary{background:linear-gradient(180deg,#f5c069,#e2a13a);border-color:#e2a13a;color:#231708;font-weight:700}
+  .btn.primary:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .hint{font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px}
+  .calib{font-size:12.5px;color:var(--muted)}
+  .calib b{color:var(--accent2);font-variant-numeric:tabular-nums}
+
+  /* lane */
+  .lane{position:relative;height:132px;margin:2px 0 4px;overflow:hidden;
+    background:linear-gradient(180deg,#0f1520,#0c1119);border:1px solid var(--line);border-radius:12px}
+  .barline{position:absolute;top:0;bottom:0;width:1px;background:#1e2836}
+  .playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);
+    box-shadow:0 0 12px rgba(240,179,74,.55);transform:translateX(-1px)}
+  .dot{position:absolute;top:0;width:14px;height:14px;border-radius:50%;
+    background:#1b2430;border:1.5px solid #38485c;transform:translate(-50%,-50%);
+    transition:background .12s,border-color .12s,box-shadow .12s}
+  .dot.off{border-style:dashed}
+  .dot.hit-good{background:var(--good);border-color:var(--good);box-shadow:0 0 14px rgba(94,224,176,.7)}
+  .dot.hit-ok{background:var(--warn);border-color:var(--warn);box-shadow:0 0 14px rgba(240,179,74,.6)}
+  .dot.hit-bad{background:var(--bad);border-color:var(--bad);box-shadow:0 0 14px rgba(255,107,107,.6)}
+  .labels{position:absolute;left:0;right:0;bottom:6px;height:14px}
+  .blabel{position:absolute;font-size:10px;color:#5f7288;transform:translateX(-50%)}
+  .float{position:absolute;font-size:11px;font-variant-numeric:tabular-nums;color:var(--accent2);
+    transform:translate(-50%,-100%);pointer-events:none;transition:opacity .5s,transform .5s;opacity:1}
+  .float.fade{opacity:0;transform:translate(-50%,-190%)}
+
+  .live{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+  .stat span{display:block;font-size:10.5px;color:var(--muted);letter-spacing:.6px}
+  .stat b{display:block;font-size:16px;margin-top:3px;font-variant-numeric:tabular-nums;font-weight:600}
+
+  .tap-pad{
+    margin-top:12px;height:88px;border-radius:14px;border:1.5px dashed #33404f;
+    display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;
+    user-select:none;cursor:pointer;background:#0f1520;transition:.1s;
+  }
+  .tap-pad:active{background:#182231;border-color:var(--accent);color:var(--ink)}
+
+  /* result */
+  .grade{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .grade .big{font-size:46px;font-weight:800;line-height:1;letter-spacing:-1px}
+  .grade .num{font-size:13px;color:var(--muted)}
+  .grade .num b{color:var(--ink);font-size:18px;vertical-align:-1px}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:14px}
+  .kv{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 11px}
+  .kv span{display:block;font-size:11px;color:var(--muted)}
+  .kv b{display:block;margin-top:4px;font-size:15px;font-variant-numeric:tabular-nums}
+  .fb{margin:14px 0 0;padding:0;list-style:none}
+  .fb li{font-size:13px;color:#c9d6e6;padding:6px 0;border-top:1px solid #1b2430;line-height:1.5}
+  .fb li:before{content:"·";color:var(--accent);margin-right:8px;font-weight:700}
+  .hist{display:flex;align-items:flex-end;gap:5px;height:52px;margin-top:10px}
+  .hist div{flex:1;min-width:6px;background:#26313f;border-radius:3px 3px 0 0}
+  .hist div.hi{background:var(--accent)}
+  .badge{font-size:11px;padding:3px 8px;border-radius:20px;border:1px solid var(--line);color:var(--muted);display:inline-block;margin-left:8px;vertical-align:1px}
+  .badge.live{border-color:var(--accent2);color:var(--accent2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Jazz 拍子實驗室 <span>· swing feel 練習</span></h1>
+    <p>唔係「啱唔啱拍子」咁簡單 — 練嘅係 <b>後半拍擺喺邊</b>（swing ratio）、<b>每一下穩唔穩</b>（σ）、同 <b>整體拉後幾多</b>（pocket）。</p>
+  </header>
+
+  <section id="setup" class="card">
+    <h2>1 · 揀拍子</h2>
+    <div class="feels" id="feels"></div>
+
+    <div class="row">
+      <label>速度</label>
+      <input type="range" id="bpm" min="50" max="260" step="1" value="120">
+      <div class="val" id="bpmVal">120 bpm</div>
+    </div>
+    <div class="row">
+      <label>小節數</label>
+      <input type="range" id="bars" min="2" max="12" step="1" value="4">
+      <div class="val" id="barsVal">4 小節</div>
+    </div>
+    <div class="row">
+      <label>目標偏移</label>
+      <input type="range" id="offset" min="-50" max="50" step="5" value="0">
+      <div class="val" id="offsetVal">0 ms</div>
+    </div>
+    <div class="hint" id="feelHint"></div>
+
+    <div class="row" style="margin-top:16px">
+      <button class="btn" id="calibBtn">先做校準（8 下 click）</button>
+      <button class="btn primary" id="startBtn">開始練習</button>
+    </div>
+    <div class="row">
+      <div class="calib" id="calibTxt">未校準：而家嘅分數會包含你部機嘅輸入延遲。</div>
+    </div>
+    <div class="hint">
+      用 <b>電腦鍵盤任何鍵</b>、<b>觸控</b>，或者接上 <b>MIDI 鍵盤</b> 都可以。<span id="midiState">MIDI：未連接</span>
+    </div>
+  </section>
+
+  <section id="stage" class="card hidden">
+    <h2>2 · 練習中 <span id="stageBadge" class="badge live">count-in</span></h2>
+    <div class="lane" id="lane">
+      <div class="playhead" id="playhead" style="left:34%"></div>
+      <div class="labels" id="labels"></div>
+    </div>
+    <div class="live">
+      <div class="stat"><span>最後一下</span><b id="sLast">—</b></div>
+      <div class="stat"><span>平均偏差</span><b id="sPocket">—</b></div>
+      <div class="stat"><span>穩定度 σ</span><b id="sSigma">—</b></div>
+      <div class="stat"><span>swing</span><b id="sRatio">—</b></div>
+    </div>
+    <div class="tap-pad" id="tapPad">喺呢度 / 鍵盤 / MIDI 打拍子</div>
+    <div class="row"><button class="btn" id="stopBtn">停</button></div>
+  </section>
+
+  <section id="result" class="card hidden">
+    <h2>3 · 結果</h2>
+    <div class="grade">
+      <div class="big" id="rGrade">A</div>
+      <div class="num">總分 <b id="rTotal">0</b> / 100<br><span id="rFeel" style="font-size:12px;color:var(--muted)"></span></div>
+    </div>
+    <div class="grid2">
+      <div class="kv"><span>平均偏差 pocket</span><b id="rPocket">—</b></div>
+      <div class="kv"><span>穩定度 σ</span><b id="rSigma">—</b></div>
+      <div class="kv"><span>正拍 σ / 後半拍 σ</span><b id="rOnOff">—</b></div>
+      <div class="kv"><span>實測 swing（目標）</span><b id="rRatio">—</b></div>
+      <div class="kv"><span>命中 / 漏 / 多</span><b id="rCounts">—</b></div>
+      <div class="kv"><span>容差窗口</span><b id="rTol">—</b></div>
+    </div>
+    <ul class="fb" id="rFb"></ul>
+    <div class="row" style="margin-top:16px"><button class="btn primary" id="againBtn">再嚟一次</button><button class="btn" id="backBtn">改設定</button></div>
+    <div class="row"><div style="width:100%"><span class="hint">最近 12 次總分</span><div class="hist" id="rHist"></div></div></div>
+  </section>
+
+  <p class="hint" style="margin-top:22px;text-align:center">spike prototype · 量度數據同可行性結論見 repo README</p>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
