@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>mic onset probe</title>
+<body style="font:14px system-ui;background:#111;color:#eee">
+<h1 style="font-size:16px">Mic onset probe</h1>
+<pre id="out">未開始</pre>
+<script>
+const S = { ctx: null, onsets: [], series: [], frames: 0, peak: 0 };
+
+async function start() {
+  const ctx = new AudioContext({ latencyHint: "interactive" });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
+  });
+  const src = ctx.createMediaStreamSource(stream);
+  const mute = ctx.createGain(); mute.gain.value = 0;   // 唔想 mic 聲出喇叭
+  mute.connect(ctx.destination);
+  const bufSize = 512;                                   // 48k → 10.7ms 一格
+  const proc = ctx.createScriptProcessor(bufSize, 1, 1);
+  const an = ctx.createAnalyser();
+  an.fftSize = 2048;
+  an.smoothingTimeConstant = 0;
+  const bins = new Uint8Array(an.frequencyBinCount);
+  const binHz = ctx.sampleRate / an.fftSize;
+  const lo = Math.floor(1500 / binHz), hi = Math.min(bins.length - 1, Math.floor(8000 / binHz));
+  let prev = new Float32Array(bins.length);
+  let fluxHist = [], lastOnset = -1;
+  proc.onaudioprocess = (e) => {
+    an.getByteFrequencyData(bins);
+    // 高頻譜通量（spectral flux）：鋼琴 attack 一定有寬頻衝擊，就算低音仲響緊都分得出
+    let flux = 0;
+    for (let i = lo; i <= hi; i++) {
+      const v = bins[i] / 255;
+      const d = v - prev[i];
+      if (d > 0) flux += d;
+      prev[i] = v;
+    }
+    fluxHist.push(flux); if (fluxHist.length > 40) fluxHist.shift();
+    if (fluxHist.length < 8) return;
+    const sorted = [...fluxHist].sort((a, b) => a - b);
+    const base = sorted[Math.floor(sorted.length * 0.5)] * 2.0 + 0.02;
+    const now = e.playbackTime ?? (ctx.currentTime - bufSize / ctx.sampleRate);
+    S.frames++;
+    S.series.push([+now.toFixed(4), +flux.toFixed(3)]);
+    if (flux > base && now - lastOnset > 0.045) {
+      S.onsets.push(+now.toFixed(4));
+      lastOnset = now;
+      fluxHist = [];
+    }
+  };
+  src.connect(an);
+  an.connect(proc);
+  proc.connect(mute);
+  S.ctx = ctx;
+  S.track = stream.getAudioTracks()[0].getSettings();
+  return { sampleRate: ctx.sampleRate, baseLatency: ctx.baseLatency, track: S.track, state: ctx.state };
+}
+
+function reset() { S.onsets = []; S.frames = 0; S.series = []; }
+function stats() {
+  return { onsets: S.onsets.slice(), series: (S.series || []).slice(), frames: S.frames, peak: +S.peak.toFixed(3) };
+}
+window.probe = { start, reset, stats };
+</script>
